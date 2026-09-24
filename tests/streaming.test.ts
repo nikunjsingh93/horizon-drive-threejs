@@ -13,6 +13,14 @@ for(const z of [-1200,-1,0,1,179.99,180,460,1199.99,1200,1200.01,2400]){
 }
 let disposals=0;
 world.update(30,0);
+const nearbyWildlife=world.fields.get('0:0')?.children[1] as THREE.Group;
+const rabbits=nearbyWildlife?.getObjectByName('Rabbits and foxes') as THREE.InstancedMesh;
+assert.ok(rabbits?.count>1,'nearby wildlife should include rabbits');
+const before=new THREE.Matrix4(),after=new THREE.Matrix4(),rabbitScale=new THREE.Vector3();
+rabbits.getMatrixAt(1,before);before.decompose(new THREE.Vector3(),new THREE.Quaternion(),rabbitScale);
+assert.ok(rabbitScale.x<1,'rabbits should be smaller than the previous model');
+world.animate(1,0,30);rabbits.getMatrixAt(1,after);
+assert.notDeepEqual(after.elements,before.elements,'nearby rabbits should move');
 const matrix=new THREE.Matrix4(),position=new THREE.Vector3();
 for(const chunk of world.chunks.values()){
  const roadside=chunk.children.find(child=>child instanceof THREE.Group) as THREE.Group;

@@ -760,14 +760,17 @@ function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:nu
   const noses=new THREE.InstancedMesh(makeAnimalDetailGeometry('nose'),new THREE.MeshStandardMaterial({color:0x33231c,roughness:.8}),capacity);
   const deerMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.98,vertexColors:true});
   const deer=new THREE.InstancedMesh(makeDeerGeometry(),deerMat,4);
+  bodies.name='Rabbits and foxes';deer.name='Deer';
   const bodyColor=new THREE.Color(),headColor=new THREE.Color(),earColor=new THREE.Color(),tailColor=new THREE.Color();
   const d=new THREE.Object3D(); let count=0;
+  const rabbitHomes:{x:number;z:number;fox:boolean}[]=[];
   const pond=world.pond(tx,tz);
   for(let tries=0;tries<capacity*12 && count<capacity;tries++){
     const x=tx*192+rng()*192,z=tz*192+rng()*192;
     if(Math.abs(world.lateral(x,z))<17||world.trailDistance&&Math.abs(world.trailDistance(x,z))<8||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.4)continue;
     const fox=(count%7===0 && season!=='winter');
-    const scale=fox?1.48:1.28+rng()*.24; const y=world.height(x,z)+.22*scale; const heading=rng()*Math.PI*2;
+    const scale=fox?1.32:.68+rng()*.12; const y=world.height(x,z)+.22*scale; const heading=rng()*Math.PI*2;
+    rabbitHomes.push({x,z,fox});
     d.position.set(x,y,z); d.rotation.set(0,heading,0); d.scale.setScalar(scale); d.updateMatrix(); bodies.setMatrixAt(count,d.matrix);
     bodyColor.set(fox?0xa96338:(count%3===0?0x9d866b:0x786653)); bodies.setColorAt(count,bodyColor);
     d.position.set(x+Math.sin(heading)*.22*scale,y+.13*scale,z+Math.cos(heading)*.22*scale); d.scale.setScalar(scale); d.updateMatrix(); heads.setMatrixAt(count,d.matrix);
@@ -784,12 +787,34 @@ function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:nu
     count++;
   }
   let deerCount=0;
+  const deerHomes:{x:number;z:number}[]=[];
   for(let tries=0;tries<48&&deerCount<4;tries++){
     const x=tx*192+rng()*192,z=tz*192+rng()*192;
     if(Math.abs(world.lateral(x,z))<20||world.trailDistance&&Math.abs(world.trailDistance(x,z))<10||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.35)continue;
-    d.position.set(x,world.height(x,z),z);d.rotation.set(0,rng()*Math.PI*2,0);d.scale.setScalar(1.08+rng()*.20);d.updateMatrix();deer.setMatrixAt(deerCount++,d.matrix);
+    d.position.set(x,world.height(x,z),z);d.rotation.set(0,rng()*Math.PI*2,0);d.scale.setScalar(1.08+rng()*.20);d.updateMatrix();deer.setMatrixAt(deerCount++,d.matrix);deerHomes.push({x,z});
   }
   addInstanced(g,bodies,count); addInstanced(g,heads,count); addInstanced(g,ears,count*2); addInstanced(g,tails,count); addInstanced(g,legs,count*4); addInstanced(g,eyes,count*2); addInstanced(g,noses,count); addInstanced(g,deer,deerCount);
+  const parts:[THREE.InstancedMesh,number][]=[[bodies,1],[heads,1],[ears,2],[tails,1],[legs,4],[eyes,2],[noses,1]];
+  const originals=parts.map(([mesh])=>Array.from({length:mesh.count},(_,i)=>{const matrix=new THREE.Matrix4();mesh.getMatrixAt(i,matrix);return matrix;}));
+  const deerOriginals=Array.from({length:deerCount},(_,i)=>{const matrix=new THREE.Matrix4();deer.getMatrixAt(i,matrix);return matrix;});
+  const move=new THREE.Matrix4(),updated=new THREE.Matrix4();let lastTick=-1;
+  g.userData.animateWildlife=(time:number)=>{
+    const tick=Math.floor(time*20);if(tick===lastTick)return;lastTick=tick;
+    for(let i=0;i<count;i++){
+      const home=rabbitHomes[i],phase=time*(home.fox?2.1:4.4)+i*2.71;
+      const dx=Math.sin(phase*.49+i)*(.55+(i%3)*.16),dz=Math.cos(phase*.41+i*1.7)*(.55+(i%2)*.20);
+      const hop=home.fox?.035*Math.max(0,Math.sin(phase)):.17*Math.max(0,Math.sin(phase))**2;
+      const dy=world.height(home.x+dx,home.z+dz)-world.height(home.x,home.z)+hop;
+      move.makeTranslation(dx,dy,dz);
+      parts.forEach(([mesh,multiple],part)=>{for(let j=0;j<multiple;j++)mesh.setMatrixAt(i*multiple+j,updated.multiplyMatrices(move,originals[part][i*multiple+j]));mesh.instanceMatrix.needsUpdate=true;});
+    }
+    for(let i=0;i<deerCount;i++){
+      const home=deerHomes[i],phase=time*.65+i*1.9,dx=Math.sin(phase)*1.5,dz=Math.cos(phase*.83)*1.2;
+      const dy=world.height(home.x+dx,home.z+dz)-world.height(home.x,home.z)+.025*Math.sin(time*5+i);
+      move.makeTranslation(dx,dy,dz);deer.setMatrixAt(i,updated.multiplyMatrices(move,deerOriginals[i]));
+    }
+    deer.instanceMatrix.needsUpdate=true;
+  };
 }
 
 
