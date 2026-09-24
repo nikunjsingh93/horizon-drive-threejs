@@ -115,7 +115,6 @@ export function createVehicle() {
   mesh(new THREE.TorusGeometry(.195,.019,10,40),black,steering);
   box(0,0,0,.30,.035,.04,black,steering);box(0,-.075,0,.03,.15,.04,black,steering);box(0,0,-.015,.12,.075,.055,cloth,steering);
   box(0,.51,-.04,.17,.20,.44,black);beam([0,.61,-.08],[0,.77,-.02],.023,black);
-  box(0,1.49,.25,.23,.075,.04,black);
   const eye=new THREE.Object3D();eye.position.set(.36,1.36,-.39);cabin.add(eye);
   const lamps:THREE.SpotLight[]=[];
   for(const side of [-1,1]){const light=new THREE.SpotLight(0xffedca,0,150,.43,.65,1.5);light.position.set(side*.54,.76,1.97);light.target.position.set(side*.8,-.9,65);group.add(light,light.target);lamps.push(light);}

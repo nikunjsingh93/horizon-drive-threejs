@@ -5,7 +5,7 @@ export type WeatherMode='clear'|'rain'|'snow';
 const random=(n:number)=>{const v=Math.sin(n*127.1+37.7)*43758.5453;return v-Math.floor(v);};
 function flakeTexture(){const canvas=document.createElement('canvas');canvas.width=canvas.height=32;const context=canvas.getContext('2d')!;const glow=context.createRadialGradient(16,16,1,16,16,15);glow.addColorStop(0,'#ffffff');glow.addColorStop(.35,'#ffffffdd');glow.addColorStop(1,'#ffffff00');context.fillStyle=glow;context.fillRect(0,0,32,32);return new THREE.CanvasTexture(canvas);}
 
-/** Camera-local weather and a few warm insects in the headlight beams. */
+/** Vehicle-anchored weather stays continuous when the camera view changes. */
 export class WeatherFX {
   private snowGeometry=new THREE.BufferGeometry();
   private rainGeometry=new THREE.BufferGeometry();
@@ -33,31 +33,33 @@ export class WeatherFX {
   update(time:number,camera:THREE.Camera,vehicle:THREE.Object3D,mode:WeatherMode,headlights:boolean,quality:GraphicsQuality){
     const counts={low:[300,300,5],medium:[450,420,9],high:[650,540,14],ultra:[800,600,18]}[quality];
     this.snow.visible=mode==='snow';this.rain.visible=mode==='rain';this.insects.visible=headlights&&mode!=='snow';
-    camera.getWorldDirection(this.direction);this.direction.y=0;this.direction.normalize();
+    vehicle.getWorldPosition(this.center);vehicle.getWorldDirection(this.direction);this.direction.y=0;this.direction.normalize();
     const rightX=this.direction.z,rightZ=-this.direction.x;
     const perspective=camera as THREE.PerspectiveCamera;
-    const halfVertical=Math.tan(THREE.MathUtils.degToRad(perspective.fov*.5));
+    // Use a fixed coverage angle: switching from the 53° chase view to the 65°
+    // cabin view must not resize or recenter the precipitation volume.
+    const halfVertical=Math.tan(THREE.MathUtils.degToRad(65*.5));
     const halfHorizontal=halfVertical*perspective.aspect;
     if(this.snow.visible){
       const count=counts[0];this.snowGeometry.setDrawRange(0,count);
       const wind=Math.sin(time*.38)*.5;
       for(let i=0;i<count;i++){
-        const j=i*3,a=this.snowSeeds[j],b=this.snowSeeds[j+1],c=this.snowSeeds[j+2],distance=12+c*43;
+        const j=i*3,a=this.snowSeeds[j],b=this.snowSeeds[j+1],c=this.snowSeeds[j+2],distance=8+c*54;
         const width=8+distance*halfHorizontal*2.8,height=8+distance*halfVertical*2.8;
         const side=(a-.5)*width,fall=((b*height-time*(1.6+c*.9))%height+height)%height;
-        this.snowPositions[j]=camera.position.x+this.direction.x*distance+rightX*(side+wind);
-        this.snowPositions[j+1]=camera.position.y+fall-height*.5;
-        this.snowPositions[j+2]=camera.position.z+this.direction.z*distance+rightZ*side;
+        this.snowPositions[j]=this.center.x+this.direction.x*distance+rightX*(side+wind);
+        this.snowPositions[j+1]=this.center.y+fall-height*.5;
+        this.snowPositions[j+2]=this.center.z+this.direction.z*distance+rightZ*side;
       }
       this.snowGeometry.attributes.position.needsUpdate=true;
     }
     if(this.rain.visible){
       const count=counts[1];this.rainGeometry.setDrawRange(0,count*2);
       for(let i=0;i<count;i++){
-        const seed=i*3,a=this.rainSeeds[seed],b=this.rainSeeds[seed+1],c=this.rainSeeds[seed+2],distance=12+c*48;
+        const seed=i*3,a=this.rainSeeds[seed],b=this.rainSeeds[seed+1],c=this.rainSeeds[seed+2],distance=8+c*54;
         const width=8+distance*halfHorizontal*2.8,height=8+distance*halfVertical*2.8;
         const side=(a-.5)*width,fall=((b*height-time*(14+c*5))%height+height)%height,j=i*6;
-        const x=camera.position.x+this.direction.x*distance+rightX*side,y=camera.position.y+fall-height*.5,z=camera.position.z+this.direction.z*distance+rightZ*side;
+        const x=this.center.x+this.direction.x*distance+rightX*side,y=this.center.y+fall-height*.5,z=this.center.z+this.direction.z*distance+rightZ*side;
         this.rainPositions[j]=x;this.rainPositions[j+1]=y;this.rainPositions[j+2]=z;
         this.rainPositions[j+3]=x-.10;this.rainPositions[j+4]=y-.75;this.rainPositions[j+5]=z-.08;
       }
@@ -65,7 +67,6 @@ export class WeatherFX {
     }
     if(this.insects.visible){
       const count=counts[2];this.insectGeometry.setDrawRange(0,count);
-      vehicle.getWorldPosition(this.center);vehicle.getWorldDirection(this.direction);
       const rightX=this.direction.z,rightZ=-this.direction.x;
       for(let i=0;i<count;i++){
         const distance=3+random(i*7+13)*10,side=(random(i*7+14)-.5)*4,j=i*3;
