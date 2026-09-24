@@ -8,6 +8,7 @@ import {createVehicle} from './vehicle';
 import {Traffic} from './traffic';
 import {WeatherFX,type WeatherMode} from './weather';
 import {DriveAudio} from './audio';
+import {SkidMarks,skidAmount} from './skid';
 import {graphicsQuality,qualityPresets,renderPixelRatio,renderResolution,type RenderResolution} from './quality';
 import './style.css';
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
@@ -45,6 +46,7 @@ const sun=new THREE.DirectionalLight(0xfff1d5,3);sun.castShadow=true;sun.shadow.
 if(renderer instanceof THREE.WebGLRenderer){const pmrem=new THREE.PMREMGenerator(renderer);const env=pmrem.fromScene(new RoomEnvironment(),.04);scene.environment=env.texture;scene.environmentIntensity=.45;pmrem.dispose();}
 else{try{const {PMREMGenerator}=await import('three/webgpu');const pmrem=new PMREMGenerator(renderer);const env=await pmrem.fromSceneAsync(new RoomEnvironment(),.04);scene.environment=env.texture;scene.environmentIntensity=.45;pmrem.dispose();}catch(error){console.warn('WebGPU environment lighting unavailable.',error);}}
 let landscape=new Landscape(settings.seed,settings.style);let drive=new Driving(landscape);drive.transmission=settings.transmission;const world=new WorldView(scene,landscape);world.quality=graphicsQuality(settings.quality);world.season=settings.season;world.update(drive.z,drive.x);
+const skidMarks=new SkidMarks(scene,landscape);
 const traffic=new Traffic(scene,landscape);
 const vehicle=createVehicle();vehicle.setColor(settings.color);scene.add(vehicle.group);
 const weatherFX=new WeatherFX(scene);
@@ -81,7 +83,7 @@ function shiftGear(direction:number){if(settings.transmission!=='manual'){toast(
 $('gearDown').onclick=()=>shiftGear(-1);$('gearUp').onclick=()=>shiftGear(1);
 $<HTMLSelectElement>('transmission').value=settings.transmission;
 $('transmission').onchange=()=>{settings.transmission=$<HTMLSelectElement>('transmission').value;drive.transmission=settings.transmission;syncTouchGears();save();toast(settings.transmission==='manual'?'Manual · Q down / E up · automatic clutch':'Automatic transmission');};
-function regenerate(){landscape=new Landscape(settings.seed,settings.style);drive=new Driving(landscape);drive.transmission=settings.transmission;world.rebuild(landscape,settings.season);world.update(drive.z,drive.x);traffic.reset(landscape,drive.z);previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};camReady=false;syncAuto();telemetry.seed=settings.seed;telemetry.maxLateral=0;save();toast('A new road is waiting');}
+function regenerate(){landscape=new Landscape(settings.seed,settings.style);drive=new Driving(landscape);drive.transmission=settings.transmission;world.rebuild(landscape,settings.season);world.update(drive.z,drive.x);skidMarks.clear(landscape);traffic.reset(landscape,drive.z);previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};camReady=false;syncAuto();telemetry.seed=settings.seed;telemetry.maxLateral=0;save();toast('A new road is waiting');}
 function atmosphere(){
  const night=settings.light==='night',golden=settings.light==='golden'&&settings.weather==='clear',overcast=settings.light==='overcast'||settings.weather!=='clear';
  const top=night?'#030817':golden?'#7192b0':overcast?'#83949e':'#367dcc',bottom=night?'#15243a':golden?'#e3b184':overcast?'#b7c3c7':'#bbd0dd';
@@ -125,12 +127,13 @@ syncFullscreenButton();
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();updateRenderResolution();});
 atmosphere();quality();setView(view);syncTouchGears();$('sound').textContent=settings.muted?'Sound off':'Sound on';
 // Explicit, visible test controls are available only in the local QA URL.
-let qaThrottle=false;
+let qaThrottle=false,qaBrake=false,qaSlide=false;
 if(new URLSearchParams(location.search).has('qa')){
  const bar=document.createElement('div');bar.style.cssText='position:fixed;top:115px;left:24px;background:#142423ee;padding:12px;z-index:20';bar.textContent='Playtest: ';
- for(const label of ['Off-road drive','Dirt road','Pond visit','Road speed','Stop test']){const b=document.createElement('button');b.textContent=label;b.style.padding='8px';bar.append(b);b.onclick=()=>{
- begin();drive.auto=false;syncAuto();qaThrottle=label!=='Stop test';if(!qaThrottle)return;
+ for(const label of ['Off-road drive','Dirt road','Pond visit','Road speed','Hard brake','Handbrake slide','Stop test']){const b=document.createElement('button');b.textContent=label;b.style.padding='8px';bar.append(b);b.onclick=()=>{
+ begin();drive.auto=false;syncAuto();qaBrake=label==='Hard brake';qaSlide=label==='Handbrake slide';qaThrottle=label!=='Stop test'&&!qaBrake&&!qaSlide;if(!qaThrottle&&!qaBrake&&!qaSlide)return;
  drive.reset();drive.heading=drive.travelHeading=label==='Off-road drive'?-Math.PI/2:0;
+ if(qaBrake||qaSlide){drive.heading=drive.travelHeading=Math.atan(landscape.slope(drive.z));drive.speed=28;}
  if(label==='Off-road drive'){drive.x=landscape.roadX(30)-65;drive.z=30;drive.speed=28;}
  if(label==='Dirt road'){drive.z=460;drive.x=landscape.trailX(drive.z);drive.heading=drive.travelHeading=Math.atan((landscape.trailX(drive.z+1)-landscape.trailX(drive.z-1))/2);drive.speed=14;qaThrottle=false;}
  if(label==='Road speed'){drive.heading=drive.travelHeading=Math.atan(landscape.slope(drive.z));drive.speed=28;drive.auto=true;qaThrottle=false;syncAuto();}
@@ -138,12 +141,16 @@ if(new URLSearchParams(location.search).has('qa')){
  drive.y=landscape.surface(drive.x,drive.z)+.035;previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};camReady=false;
  };}document.body.append(bar);
 }
-function frame(now:number){requestAnimationFrame(frame);const raw=(now-last)/1000,dt=Math.min(raw,.1);last=now;const controls=input();if(qaThrottle){controls.throttle=1;controls.brake=0;controls.steer=0;}
+function frame(now:number){requestAnimationFrame(frame);const raw=(now-last)/1000,dt=Math.min(raw,.1);last=now;const controls=input();if(qaThrottle){controls.throttle=1;controls.brake=0;controls.steer=0;}if(qaBrake){controls.throttle=0;controls.brake=1;controls.steer=0;}if(qaSlide){controls.throttle=0;controls.brake=0;controls.steer=1;controls.handbrake=true;}
  if(!mouseDragging&&now>mouseReleaseAt){mouseYaw=damp(mouseYaw,0,1.7,dt);mousePitch=damp(mousePitch,0,1.7,dt);if(Math.abs(mouseYaw)<.001)mouseYaw=0;if(Math.abs(mousePitch)<.001)mousePitch=0;}
  if(started&&!paused){accumulator+=dt;while(accumulator>=STEP){previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};drive.step(STEP,controls);telemetry.simulated+=STEP;accumulator-=STEP;}telemetry.elapsed+=raw;telemetry.frames++;samples.push(raw*1000);if(samples.length>3600)samples.shift();telemetry.maxMs=Math.max(telemetry.maxMs,raw*1000);telemetry.maxLateral=Math.max(telemetry.maxLateral,Math.abs(landscape.lateral(drive.x,drive.z)));}else{accumulator=0;previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};}
+ if(qaBrake&&drive.speed<1)qaBrake=false;
+ if(qaSlide&&(drive.offroad||Math.abs(drive.speed)<4))qaSlide=false;
  const a=started&&!paused?accumulator/STEP:1;const x=THREE.MathUtils.lerp(previous.x,drive.x,a),z=THREE.MathUtils.lerp(previous.z,drive.z,a),y=THREE.MathUtils.lerp(previous.y,drive.y,a),yaw=THREE.MathUtils.lerp(previous.heading,drive.heading,a);world.update(z,x);
  const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));const front=landscape.surface(x+forward.x*1.35,z+forward.z*1.35),back=landscape.surface(x-forward.x*1.35,z-forward.z*1.35);const groundPitch=-Math.atan2(front-back,2.7);const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)),ry=landscape.surface(x+right.x*.9,z+right.z*.9),ly=landscape.surface(x-right.x*.9,z-right.z*.9);const groundRoll=Math.atan2(ry-ly,1.8);
   vehicle.group.position.set(x,y,z);vehicle.group.rotation.set(groundPitch,yaw,groundRoll,'YXZ');vehicle.animate(paused?0:drive.speed,drive.steer,drive.roll,drive.pitch,paused?0:dt,(controls.brake||controls.handbrake)?1:0);
+ const skid=started&&!paused?skidAmount(drive.speed,controls.brake,controls.handbrake,drive.slip,drive.offroad):0;
+ skidMarks.update(x,z,yaw,skid);
  if(view==='chase'){const dist=6.7;/* Screen-right drag should move the chase camera to screen-right, GTA-style. */const orbitYaw=yaw-mouseYaw;const orbitForward=new THREE.Vector3(Math.sin(orbitYaw),0,Math.cos(orbitYaw));desired.set(x-orbitForward.x*dist,y+2.8+mousePitch*dist,z-orbitForward.z*dist);desired.y=Math.max(desired.y,landscape.height(desired.x,desired.z)+1.3);look.set(x+orbitForward.x*8,y+1.05+mousePitch*3,z+orbitForward.z*8);}else{
   const interior=view==='interior';
   if(interior){
@@ -163,11 +170,11 @@ function frame(now:number){requestAnimationFrame(frame);const raw=(now-last)/100
  if(view==='chase'&&camReady){const delta=vehicle.group.position.clone().sub(followPosition);camera.position.add(delta);camLook.add(delta);}followPosition.copy(vehicle.group.position);
  if(view!=='interior')camera.up.set(0,1,0);
  if(!camReady||view!=='chase'){camera.position.copy(desired);camLook.copy(look);camReady=true;}else{camera.position.lerp(desired,1-Math.exp(-(view==='chase'?5:18)*dt));camLook.lerp(look,1-Math.exp(-(view==='chase'?7:20)*dt));}camera.lookAt(camLook);camera.fov=damp(camera.fov,view==='chase'?53:65,3,dt);camera.updateProjectionMatrix();sky.position.copy(camera.position);camera.updateMatrixWorld();if(!gpuSky){const uniforms=(sky.material as THREE.ShaderMaterial).uniforms;uniforms.cameraWorld.value.copy(camera.matrixWorld);uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);}
- sun.position.set(x-70,y+90,z+50);sun.target.position.set(x,y,z);audio.update(paused?0:drive.speed,paused?0:drive.throttle,drive.offroad,paused?0:drive.slip,dt,drive.rpm);
+ sun.position.set(x-70,y+90,z+50);sun.target.position.set(x,y,z);audio.update(paused?0:drive.speed,paused?0:drive.throttle,drive.offroad,paused?0:drive.slip,dt,drive.rpm,skid);
  world.animate(now/1000,x,z);traffic.update(started&&!paused?dt:0,z,settings.quality==='low');weatherFX.update(now/1000,camera,vehicle.group,settings.weather,headlights,graphicsQuality(settings.quality));renderer.render(scene,camera);frameCount++;if(now-statsStart>1000){fps=frameCount*1000/(now-statsStart);frameCount=0;statsStart=now;const sorted=[...samples].sort((a,b)=>a-b);telemetry.meanMs=samples.reduce((a,b)=>a+b,0)/Math.max(samples.length,1);telemetry.p95Ms=sorted[Math.floor(sorted.length*.95)]||0;telemetry.triangles=renderer.info.render.triangles;telemetry.drawCalls=renderer.info.render.calls;telemetry.chunks=world.chunks.size;telemetry.memoryGeometries=renderer.info.memory.geometries;}
  if(now-lastHUD>120){$('speed').textContent=Math.abs(drive.speed*3.6).toFixed(0);$('gearReadout').textContent=`${settings.transmission==='manual'?'M':'AUTO'} · ${drive.gear<0?'R':drive.gear===0?'N':drive.gear} · ${Math.round(drive.rpm)} RPM`;$('distance').textContent=(drive.distance/1000).toFixed(1);$('stats').textContent=`${fps.toFixed(0)} FPS · ${telemetry.p95Ms.toFixed(1)} ms p95\n${telemetry.drawCalls} draws · ${(telemetry.triangles/1000).toFixed(0)}k triangles\n${telemetry.chunks} chunks · ${telemetry.elapsed.toFixed(0)}s driving`;lastHUD=now;}
  // A read-only DOM status supports reproducible browser verification.
- document.body.dataset.drivingState=JSON.stringify({started,paused,auto:drive.auto,speed:drive.speed,x:drive.x,z:drive.z,y:drive.y,lateral:landscape.lateral(drive.x,drive.z),distance:drive.distance,view,lookYaw:mouseYaw,lookPitch:mousePitch,gear:drive.gear,rpm:drive.rpm,transmission:drive.transmission,renderer:activeBackend,headlights,quality:settings.quality,resolution:settings.resolution,renderWidth:renderer.domElement.width,renderHeight:renderer.domElement.height,weather:settings.weather,terrainTiles:world.fields.size,cameraDistance:camera.position.distanceTo(vehicle.group.position),cameraSeatError:view==='interior'?camera.position.distanceTo(desired):null,season:settings.season,slip:drive.slip,roll:drive.roll,pitch:drive.pitch,handbrake:controls.handbrake,...telemetry});prevYaw=yaw;
+ document.body.dataset.drivingState=JSON.stringify({started,paused,auto:drive.auto,speed:drive.speed,x:drive.x,z:drive.z,y:drive.y,lateral:landscape.lateral(drive.x,drive.z),distance:drive.distance,view,lookYaw:mouseYaw,lookPitch:mousePitch,gear:drive.gear,rpm:drive.rpm,transmission:drive.transmission,renderer:activeBackend,headlights,quality:settings.quality,resolution:settings.resolution,renderWidth:renderer.domElement.width,renderHeight:renderer.domElement.height,weather:settings.weather,terrainTiles:world.fields.size,cameraDistance:camera.position.distanceTo(vehicle.group.position),cameraSeatError:view==='interior'?camera.position.distanceTo(desired):null,season:settings.season,slip:drive.slip,skid,skidMarks:skidMarks.mesh.geometry.drawRange.count/6,roll:drive.roll,pitch:drive.pitch,handbrake:controls.handbrake,...telemetry});prevYaw=yaw;
 }
 requestAnimationFrame(frame);
 

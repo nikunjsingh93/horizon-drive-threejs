@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {Landscape} from '../src/simulation';
 import {WorldView} from '../src/world';
+import {SkidMarks,skidAmount} from '../src/skid';
 // Drawing itself is verified in-browser; here exercise actual mesh generation and disposal.
 const drawing=new Proxy({createImageData:(w:number,h:number)=>({data:new Uint8ClampedArray(w*h*4)})},{get:(obj,key)=>key in obj?(obj as any)[key]:()=>{}});
 (globalThis as any).document={createElement:()=>({width:0,height:0,getContext:()=>drawing})};
@@ -61,4 +62,14 @@ for(const [x,z] of [[2100,30],[2100,2100],[-2300,-2100],[0,30]]){
  assert.equal(scene.children.length,55,'old world groups must be removed');
 }
 assert.ok(disposals>150,'obsolete terrain and vegetation geometries must be disposed');
+assert.equal(skidAmount(22,.3,false,0,false),0,'gentle braking should not squeal');
+assert.ok(skidAmount(22,1,false,0,false)>.9,'hard braking should skid');
+assert.ok(skidAmount(12,0,true,.2,false)>.5,'handbrake slides should skid');
+assert.equal(skidAmount(22,1,true,.5,true),0,'off-road movement should not leave asphalt marks');
+const marks=new SkidMarks(scene,land),roadX=land.roadX(30)-1.85;
+marks.update(roadX,30,0,.8);marks.update(roadX,30.7,0,.8);
+assert.equal(marks.mesh.geometry.drawRange.count,12,'two rear tires should leave strips');
+const markPosition=marks.mesh.geometry.getAttribute('position');
+assert.ok(Math.abs(markPosition.getY(0)-land.roadY(markPosition.getZ(0))-.045)<.0001,'strips must sit on the road');
+marks.clear();assert.equal(marks.mesh.geometry.drawRange.count,0,'new worlds must clear old tire marks');
 console.log('streaming tests passed: 2D terrain coverage across ±2 km, bounded tile count, deterministic heights and geometry disposal');

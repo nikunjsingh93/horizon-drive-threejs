@@ -7,6 +7,10 @@ export class DriveAudio {
   private windFilter: BiquadFilterNode | null = null;
   private tireGain: GainNode | null = null;
   private tireFilter: BiquadFilterNode | null = null;
+  private skidGain: GainNode | null = null;
+  private skidFilter: BiquadFilterNode | null = null;
+  private skidTone: OscillatorNode | null = null;
+  private skidToneGain: GainNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
   private volume = 0.35;
   private muted = false;
@@ -30,7 +34,7 @@ export class DriveAudio {
     }
   }
 
-  update(speed: number, throttle: number, offroad: boolean, slide: number, dt: number, rpm = 850): void {
+  update(speed: number, throttle: number, offroad: boolean, slide: number, dt: number, rpm = 850, skid = 0): void {
     const context = this.context;
     if (!context || !this.started || context.state !== "running") return;
 
@@ -70,6 +74,11 @@ export class DriveAudio {
       this.ramp(this.tireFilter.frequency, 520 + motion * 620 + roughness * 420 + this.smoothedSlide * 1150, now, 0.2);
       this.ramp(this.tireFilter.Q, 0.55 + roughness * 0.25, now, 0.3);
     }
+    const squeal = Math.min(1, Math.max(0, skid));
+    if (this.skidGain) this.ramp(this.skidGain.gain, squeal * 0.13, now, squeal ? 0.045 : 0.16);
+    if (this.skidFilter) this.ramp(this.skidFilter.frequency, 1050 + motion * 1300, now, 0.08);
+    if (this.skidTone) this.ramp(this.skidTone.frequency, 370 + velocity * 13, now, 0.09);
+    if (this.skidToneGain) this.ramp(this.skidToneGain.gain, squeal * 0.012, now, squeal ? 0.05 : 0.14);
   }
 
   setVolume(volume: number): void {
@@ -133,6 +142,27 @@ export class DriveAudio {
     tireGain.connect(master);
     this.tireFilter = tireFilter;
     this.tireGain = tireGain;
+    const skid = this.createNoise(context, 2);
+    const skidFilter = context.createBiquadFilter();
+    skidFilter.type = 'bandpass';
+    skidFilter.frequency.value = 1400;
+    skidFilter.Q.value = 1.4;
+    const skidGain = context.createGain();
+    skidGain.gain.value = 0;
+    skid.connect(skidFilter);
+    skidFilter.connect(skidGain);
+    skidGain.connect(master);
+    this.skidFilter = skidFilter;
+    this.skidGain = skidGain;
+    const skidTone = context.createOscillator();
+    skidTone.type = 'sine';
+    const skidToneGain = context.createGain();
+    skidToneGain.gain.value = 0;
+    skidTone.connect(skidToneGain);
+    skidToneGain.connect(master);
+    skidTone.start();
+    this.skidTone = skidTone;
+    this.skidToneGain = skidToneGain;
     this.started = true;
     this.applyMasterGain();
   }
