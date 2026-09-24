@@ -12,7 +12,7 @@ for(const z of [-1200,-1,0,1,179.99,180,460,1199.99,1200,1200.01,2400]){
  assert.ok(Math.abs(land.trailX(z+.001)-x)<.02,'dirt track must remain continuous');
 }
 let disposals=0;
-world.update(30,0);
+for(let i=0;i<60;i++)world.update(30,0);
 const nearbyWildlife=world.fields.get('0:0')?.children[1] as THREE.Group;
 const rabbits=nearbyWildlife?.getObjectByName('Rabbits and foxes') as THREE.InstancedMesh;
 assert.ok(rabbits?.count>1,'nearby wildlife should include rabbits');
@@ -54,11 +54,11 @@ for(const field of world.fields.values()){
 }
 for(const g of world.fields.values())g.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.addEventListener('dispose',()=>disposals++);});
 for(const [x,z] of [[2100,30],[2100,2100],[-2300,-2100],[0,30]]){
- world.update(z,x);assert.equal(world.fields.size,49);assert.equal(world.chunks.size,11);
+ for(let i=0;i<60;i++)world.update(z,x);assert.equal(world.fields.size,49);assert.equal(world.chunks.size,6);
  const g=world.fields.get(`${Math.floor(x/192)}:${Math.floor(z/192)}`)!;assert.ok(g,'terrain must exist below car');
  const positions=(g.children[0] as THREE.Mesh).geometry.getAttribute('position');
  for(let i=0;i<positions.count;i+=53)assert.ok(Math.abs(positions.getY(i)-land.height(positions.getX(i),positions.getZ(i)))<.0001);
- assert.equal(scene.children.length,60,'old world groups must be removed');
+ assert.equal(scene.children.length,55,'old world groups must be removed');
 }
 assert.ok(disposals>150,'obsolete terrain and vegetation geometries must be disposed');
 console.log('streaming tests passed: 2D terrain coverage across ±2 km, bounded tile count, deterministic heights and geometry disposal');

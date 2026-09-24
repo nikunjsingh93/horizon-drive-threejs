@@ -23,8 +23,9 @@ export class WorldView {
  mudMat=new THREE.MeshStandardMaterial({color:0x46392e,roughness:1});
  debrisMat=new THREE.MeshStandardMaterial({color:0x4e4b42,roughness:1});
  constructor(public scene:THREE.Scene,public landscape:Landscape){}
- update(z:number,x=this.landscape.roadX(z)){this.updateFields(x,z);const center=Math.floor(z/CHUNK),preset=qualityPresets[this.quality];const needed=[];for(let i=center-preset.chunkBehind;i<=center+preset.chunkAhead;i++)needed.push(i);for(const [i,g] of this.chunks){if(!needed.includes(i)){this.dispose(g);this.chunks.delete(i);}}
- for(const i of needed)if(!this.chunks.has(i)){const g=this.chunk(i);this.chunks.set(i,g);this.scene.add(g);}
+ update(z:number,x=this.landscape.roadX(z)){this.updateFields(x,z);const center=Math.floor(z/CHUNK),preset=qualityPresets[this.quality];const needed=[];for(let i=center-preset.chunkBehind;i<=center+preset.chunkAhead;i++)needed.push(i);const wanted=new Set(needed);for(const [i,g] of this.chunks)if(!wanted.has(i)){this.dispose(g);this.chunks.delete(i);break;}
+ needed.sort((a,b)=>Math.abs(a-center)-Math.abs(b-center)||b-a);
+ for(const i of needed)if(!this.chunks.has(i)){const g=this.chunk(i);this.chunks.set(i,g);this.scene.add(g);break;}
  }
  animate(time:number,playerX:number,playerZ:number){for(const chunk of this.chunks.values())for(const child of chunk.children){const animateBirds=child.userData.animateBirds as ((time:number)=>void)|undefined;animateBirds?.(time);}for(const [key,field] of this.fields){const [tx,tz]=key.split(':').map(Number),nearX=Math.max(tx*192,Math.min(playerX,(tx+1)*192)),nearZ=Math.max(tz*192,Math.min(playerZ,(tz+1)*192));if((playerX-nearX)**2+(playerZ-nearZ)**2>140**2)continue;const animateWildlife=field.children[1]?.userData.animateWildlife as ((time:number)=>void)|undefined;animateWildlife?.(time);}}
  setQuality(quality:GraphicsQuality){if(this.quality===quality)return;this.quality=quality;this.rebuild();}
@@ -46,10 +47,11 @@ export class WorldView {
  this.roadside(g,start,index);return g;
  }
  updateFields(x:number,z:number){
- const cx=Math.floor(x/192),cz=Math.floor(z/192),needed=new Set<string>(),radius=qualityPresets[this.quality].tileRadius;
+ const cx=Math.floor(x/192),cz=Math.floor(z/192),needed=new Set<string>(),missing:{x:number;z:number;distance:number}[]=[],radius=qualityPresets[this.quality].tileRadius;
  for(let a=cx-radius;a<=cx+radius;a++)for(let b=cz-radius;b<=cz+radius;b++){
- const key=`${a}:${b}`;needed.add(key);if(!this.fields.has(key)){const g=this.field(a,b);this.fields.set(key,g);this.scene.add(g);}}
- for(const [key,g] of this.fields)if(!needed.has(key)){this.dispose(g);this.fields.delete(key);}
+ const key=`${a}:${b}`;needed.add(key);if(!this.fields.has(key))missing.push({x:a,z:b,distance:(a-cx)**2+(b-cz)**2});}
+ for(const [key,g] of this.fields)if(!needed.has(key)){this.dispose(g);this.fields.delete(key);break;}
+ if(missing.length){missing.sort((a,b)=>a.distance-b.distance);const tile=missing[0],key=`${tile.x}:${tile.z}`,g=this.field(tile.x,tile.z);this.fields.set(key,g);this.scene.add(g);}
  }
  field(tx:number,tz:number){
  const group=new THREE.Group(),w=this.landscape,pos:number[]=[],uv:number[]=[],colors:number[]=[],ix:number[]=[],c=new THREE.Color(),n=qualityPresets[this.quality].terrainSegments;
@@ -82,15 +84,18 @@ export class WorldView {
  }
 }
 export function createSky(){
- const material=new THREE.ShaderMaterial({side:THREE.DoubleSide,depthWrite:false,toneMapped:false,uniforms:{top:{value:new THREE.Color('#367dcc')},bottom:{value:new THREE.Color('#bbd0dd')},night:{value:0},cameraWorld:{value:new THREE.Matrix4()},inverseProjection:{value:new THREE.Matrix4()}},vertexShader:'varying vec2 vScreen; void main(){vScreen=position.xy;gl_Position=vec4(position.xy,1.,1.);}',fragmentShader:`
- varying vec2 vScreen;uniform mat4 cameraWorld;uniform mat4 inverseProjection;uniform vec3 top;uniform vec3 bottom;uniform float night;
+ const material=new THREE.ShaderMaterial({side:THREE.DoubleSide,depthWrite:false,toneMapped:false,uniforms:{top:{value:new THREE.Color('#367dcc')},bottom:{value:new THREE.Color('#bbd0dd')},night:{value:0},cloudDetail:{value:1},cameraWorld:{value:new THREE.Matrix4()},inverseProjection:{value:new THREE.Matrix4()}},vertexShader:'varying vec2 vScreen; void main(){vScreen=position.xy;gl_Position=vec4(position.xy,1.,1.);}',fragmentShader:`
+ varying vec2 vScreen;uniform mat4 cameraWorld;uniform mat4 inverseProjection;uniform vec3 top;uniform vec3 bottom;uniform float night;uniform float cloudDetail;
  float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
  float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
  float fbm(vec2 p){float n=0.,a=.5;for(int i=0;i<5;i++){n+=noise(p)*a;p=p*2.03+vec2(17,9);a*=.5;}return n;}
  void main(){vec3 ray=(inverseProjection*vec4(vScreen,1.,1.)).xyz;vec3 d=normalize((cameraWorld*vec4(ray,0.)).xyz);float h=max(d.y,0.);vec3 c=mix(bottom,top,pow(h,.38));
  vec3 sunDir=normalize(vec3(-.7,.55,.5));float sun=max(dot(d,sunDir),0.);
  c+=vec3(1.,.77,.44)*pow(sun,90.)*.3*(1.-night);c+=vec3(1.,.91,.73)*smoothstep(.9993,.9997,sun)*(1.-night)*2.;
- vec2 cloudUV=d.xz/max(d.y+.27,.18)*1.05;vec2 warp=vec2(fbm(cloudUV*.34+vec2(4.7,2.1)),fbm(cloudUV*.34-vec2(2.3,8.4)));cloudUV+=(warp-.5)*4.2;float broad=fbm(cloudUV*.58+vec2(3.1,1.7));float middle=fbm(cloudUV*1.28-vec2(8.0,4.0));float detail=fbm(cloudUV*2.65+vec2(11.0,2.0));float n=broad*.52+middle*.32+detail*.16;float horizonFade=smoothstep(.008,.19,h)*(1.-smoothstep(.80,.99,h));float cloud=smoothstep(.36,.69,n)*horizonFade*(1.-night);float wisps=smoothstep(.61,.79,detail)*smoothstep(.05,.3,h)*(1.-smoothstep(.62,.92,h))*(1.-night)*.18;
+ vec2 cloudUV=d.xz/max(d.y+.27,.18)*1.05;float n=0.,detail=0.;
+ if(night<.5){if(cloudDetail<.5){n=noise(cloudUV*.52+vec2(3.1,1.7))*.68+noise(cloudUV*1.05-vec2(8.,4.))*.32;detail=n;}
+ else{vec2 warp=vec2(fbm(cloudUV*.34+vec2(4.7,2.1)),fbm(cloudUV*.34-vec2(2.3,8.4)));cloudUV+=(warp-.5)*4.2;float broad=fbm(cloudUV*.58+vec2(3.1,1.7));float middle=fbm(cloudUV*1.28-vec2(8.0,4.0));detail=fbm(cloudUV*2.65+vec2(11.0,2.0));n=broad*.52+middle*.32+detail*.16;}}
+ float horizonFade=smoothstep(.008,.19,h)*(1.-smoothstep(.80,.99,h));float cloud=smoothstep(.36,.69,n)*horizonFade*(1.-night);float wisps=smoothstep(.61,.79,detail)*smoothstep(.05,.3,h)*(1.-smoothstep(.62,.92,h))*(1.-night)*.18;
  float underside=1.-smoothstep(.50,.68,n);vec3 cloudColor=mix(vec3(.48,.56,.63),vec3(.99,.985,.96),smoothstep(.45,.72,n));cloudColor=mix(cloudColor,vec3(.36,.42,.47),underside*.24);float silver=smoothstep(.58,.84,sun)*cloud*(1.-night);cloudColor+=vec3(.20,.16,.10)*silver;cloudColor=mix(cloudColor,vec3(.06,.09,.15),night);
  c=mix(c,cloudColor,clamp(cloud*.78+wisps,0.,.86));
  vec2 starUV=vec2(atan(d.z,d.x),asin(d.y))*650.;vec2 cell=floor(starUV),f=fract(starUV)-.5;float star=step(.998,hash(cell))*smoothstep(.11,0.,length(f))*smoothstep(.05,.4,h)*(1.-cloud);

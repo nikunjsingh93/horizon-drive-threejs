@@ -58,6 +58,14 @@ export function createVehicle() {
   const roofFront=.12, roofBack=-1.63, roofY=1.65;
   box(0,roofY,-.755,1.38,.055,1.81,paint);
   panel([[-.77,1,.65],[.77,1,.65],[.665,1.615,roofFront],[-.665,1.615,roofFront]],glass);
+  const wiperAxis=new THREE.Vector3(0,.65,.76).normalize();
+  const wipers:THREE.Group[]=[];
+  for(const side of [-1,1]){
+    const pivot=new THREE.Group();pivot.position.set(side<0?-.44:.25,1.035,.625);cabin.add(pivot);
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(.38,.008,.008),black);arm.position.set(-side*.19,.025,-.026);pivot.add(arm);
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(.46,.011,.012),black);blade.position.set(-side*.30,.039,-.036);pivot.add(blade);
+    wipers.push(pivot);
+  }
   panel([[-.77,1,-1.88],[-.67,1.62,roofBack],[.67,1.62,roofBack],[.77,1,-1.88]],glass);
   for(const s of [-1,1]) {
     panel([[s*.775,1,.61],[s*.667,1.615,.10],[s*.667,1.615,-.57],[s*.775,1,-.57]],glass);
@@ -111,9 +119,10 @@ export function createVehicle() {
   const eye=new THREE.Object3D();eye.position.set(.36,1.36,-.39);cabin.add(eye);
   const lamps:THREE.SpotLight[]=[];
   for(const side of [-1,1]){const light=new THREE.SpotLight(0xffedca,0,150,.43,.65,1.5);light.position.set(side*.54,.76,1.97);light.target.position.set(side*.8,-.9,65);group.add(light,light.target);lamps.push(light);}
-  let rotation=0,tailLights=false;
+  let rotation=0,tailLights=false,wipersOn=false,wiperTime=0;
   return {group,eye,setLights(on:boolean){tailLights=on;for(const lamp of lamps)lamp.intensity=on?1350:0;white.emissiveIntensity=on?3:.2;red.emissiveIntensity=on?1.45:.28;red.emissive.set(on?0xff2418:0x2b0503);},
-    animate(speed:number,steer:number,roll:number,pitch:number,dt:number,brake=0){rotation+=speed*Math.min(dt,.1)/.33;for(const w of wheels){w.spin.rotation.x=rotation;if(w.front)w.pivot.rotation.y=-THREE.MathUtils.clamp(steer,-.65,.65);}cabin.rotation.set(THREE.MathUtils.clamp(pitch,-.16,.16),0,THREE.MathUtils.clamp(roll,-.22,.22));steering.rotation.z=THREE.MathUtils.clamp(steer*3.5,-1.6,1.6);red.color.set(0x9c241b);red.emissiveIntensity=tailLights?1.45:.28;red.emissive.set(tailLights?0xff2418:0x2b0503);brakeRed.opacity=brake>.01?1:0;},
+    setWipers(on:boolean){wipersOn=on;},
+    animate(speed:number,steer:number,roll:number,pitch:number,dt:number,brake=0){rotation+=speed*Math.min(dt,.1)/.33;for(const w of wheels){w.spin.rotation.x=rotation;if(w.front)w.pivot.rotation.y=-THREE.MathUtils.clamp(steer,-.65,.65);}cabin.rotation.set(THREE.MathUtils.clamp(pitch,-.16,.16),0,THREE.MathUtils.clamp(roll,-.22,.22));steering.rotation.z=THREE.MathUtils.clamp(steer*3.5,-1.6,1.6);if(wipersOn)wiperTime+=dt*5.2;const sweep=wipersOn?(1-Math.cos(wiperTime))*.50:0;wipers.forEach((w,i)=>w.quaternion.setFromAxisAngle(wiperAxis,(i===0?1:-1)*sweep));red.color.set(0x9c241b);red.emissiveIntensity=tailLights?1.45:.28;red.emissive.set(tailLights?0xff2418:0x2b0503);brakeRed.opacity=brake>.01?1:0;},
     setColor(color:string){paint.color.set(color);},
     setInterior(inside:boolean){glass.visible=!inside;},
   };
