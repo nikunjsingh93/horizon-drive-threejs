@@ -5,7 +5,7 @@
   "description": "Take the long way through a peaceful, endless countryside.",
   "start_url": "./",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#263436",
   "theme_color": "#263436",

@@ -75,7 +75,26 @@ function atmosphere(){
 }
 function quality(){const selected=graphicsQuality(settings.quality),preset=qualityPresets[selected];settings.quality=selected;renderer.setPixelRatio(Math.min(devicePixelRatio,preset.pixelRatio));renderer.shadowMap.enabled=preset.shadowSize>0;sun.castShadow=preset.shadowSize>0;if(preset.shadowSize){sun.shadow.mapSize.set(preset.shadowSize,preset.shadowSize);}sun.shadow.map?.dispose();sun.shadow.map=null;world.setQuality(selected);world.update(drive.z,drive.x);atmosphere();save();}
 for(const [id,key] of [['seed','seed'],['roadStyle','style'],['season','season'],['light','light'],['quality','quality'],['carColor','color'],['volume','volume'],['view','view']] as const){const el=$<HTMLInputElement|HTMLSelectElement>(id);el.value=String(settings[key]);el.addEventListener('change',()=>{if(key==='volume'){settings.volume=Number(el.value);audio.setVolume(settings.volume);}else{(settings as Record<string,unknown>)[key]=el.value;}if(key==='season'){world.rebuild(landscape,settings.season);world.update(drive.z,drive.x);atmosphere();}if(key==='light')atmosphere();if(key==='quality')quality();if(key==='color')vehicle.setColor(settings.color);if(key==='view')setView(el.value);save();});}
-$('random').onclick=()=>{$<HTMLInputElement>('seed').value=Math.random().toString(36).slice(2,10).toUpperCase();settings.seed=$<HTMLInputElement>('seed').value;};$('generate').onclick=()=>{settings.seed=$<HTMLInputElement>('seed').value||'OPEN-ROAD';settings.style=$<HTMLSelectElement>('roadStyle').value;regenerate();setPanel(null);};$('fullscreen').onclick=()=>{if(document.fullscreenElement)void document.exitFullscreen();else void document.documentElement.requestFullscreen();};$<HTMLInputElement>('showStats').onchange=()=>$('stats').hidden=!$<HTMLInputElement>('showStats').checked;
+$('random').onclick=()=>{$<HTMLInputElement>('seed').value=Math.random().toString(36).slice(2,10).toUpperCase();settings.seed=$<HTMLInputElement>('seed').value;};$('generate').onclick=()=>{settings.seed=$<HTMLInputElement>('seed').value||'OPEN-ROAD';settings.style=$<HTMLSelectElement>('roadStyle').value;regenerate();setPanel(null);};$<HTMLInputElement>('showStats').onchange=()=>$('stats').hidden=!$<HTMLInputElement>('showStats').checked;
+const fullscreenButton=$<HTMLButtonElement>('fullscreen');
+const installedFullscreen=window.matchMedia('(display-mode: fullscreen)');
+function syncFullscreenButton(){
+ const active=!!document.fullscreenElement||installedFullscreen.matches;
+ fullscreenButton.textContent=installedFullscreen.matches?'Fullscreen active':active?'Exit fullscreen':'Enter fullscreen';
+ fullscreenButton.disabled=installedFullscreen.matches;
+ fullscreenButton.setAttribute('aria-pressed',String(active));
+}
+fullscreenButton.onclick=async()=>{
+ try{
+  if(document.fullscreenElement)await document.exitFullscreen();
+  else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();
+  else toast('Fullscreen is unavailable in this browser');
+ }catch{toast('Fullscreen is unavailable in this browser');}
+ syncFullscreenButton();
+};
+document.addEventListener('fullscreenchange',syncFullscreenButton);
+installedFullscreen.addEventListener('change',syncFullscreenButton);
+syncFullscreenButton();
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 atmosphere();quality();setView(view);syncTouchGears();$('sound').textContent=settings.muted?'Sound off':'Sound on';
 // Explicit, visible test controls are available only in the local QA URL.
