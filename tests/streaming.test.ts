@@ -21,6 +21,15 @@ rabbits.getMatrixAt(1,before);before.decompose(new THREE.Vector3(),new THREE.Qua
 assert.ok(rabbitScale.x<1,'rabbits should be smaller than the previous model');
 world.animate(1,0,30);rabbits.getMatrixAt(1,after);
 assert.notDeepEqual(after.elements,before.elements,'nearby rabbits should move');
+const deer=nearbyWildlife.getObjectByName('Deer') as THREE.InstancedMesh;
+const deerLegs=nearbyWildlife.getObjectByName('Deer legs') as THREE.InstancedMesh;
+assert.ok(deer?.count>0&&deerLegs?.count===deer.count*4,'each deer needs four separate legs');
+const deerBodyMatrix=new THREE.Matrix4(),deerLegMatrix=new THREE.Matrix4();
+deer.getMatrixAt(0,deerBodyMatrix);deerLegs.getMatrixAt(0,deerLegMatrix);
+const relativeLegAtOne=deerBodyMatrix.clone().invert().multiply(deerLegMatrix);
+world.animate(2,0,30);deer.getMatrixAt(0,deerBodyMatrix);deerLegs.getMatrixAt(0,deerLegMatrix);
+const relativeLegAtTwo=deerBodyMatrix.clone().invert().multiply(deerLegMatrix);
+assert.notDeepEqual(relativeLegAtOne.elements,relativeLegAtTwo.elements,'deer legs must swing relative to the body');
 const matrix=new THREE.Matrix4(),position=new THREE.Vector3();
 for(const chunk of world.chunks.values()){
  const roadside=chunk.children.find(child=>child instanceof THREE.Group) as THREE.Group;
