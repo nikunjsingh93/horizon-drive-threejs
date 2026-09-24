@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { Driving, Landscape } from "../src/simulation";
 import type { Input } from "../src/simulation";
+import {renderPixelRatio,renderResolution} from '../src/quality';
+
+assert.equal(renderResolution('bogus'),'auto');
+assert.equal(renderPixelRatio(720,2,'low','auto'),.55);
+assert.equal(renderPixelRatio(720,2,'low','1080'),1.5);
+assert.equal(renderPixelRatio(720,1,'high','2160'),3);
 
 const neutral: Input = { throttle: 0, brake: 0, steer: 0, handbrake: false };
 const tick = 1 / 60;

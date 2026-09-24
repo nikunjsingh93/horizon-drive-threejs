@@ -6,7 +6,7 @@ import {createVehicle} from './vehicle';
 import {Traffic} from './traffic';
 import {WeatherFX,type WeatherMode} from './weather';
 import {DriveAudio} from './audio';
-import {graphicsQuality,qualityPresets} from './quality';
+import {graphicsQuality,qualityPresets,renderPixelRatio,renderResolution,type RenderResolution} from './quality';
 import './style.css';
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
 const touchPointer=matchMedia('(pointer: coarse)');
@@ -17,13 +17,14 @@ function showTouchControls(){
 showTouchControls();
 touchPointer.addEventListener('change',showTouchControls);
 window.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'){observedTouch=true;showTouchControls();}},{passive:true});
-const defaults={seed:'OPEN-ROAD',style:'flowing',season:'summer',light:'day',weather:'clear' as WeatherMode,quality:navigator.maxTouchPoints>0?'low':'high',color:'#e5e8e2',volume:.35,muted:false,view:'chase',transmission:'automatic'};
+const defaults={seed:'OPEN-ROAD',style:'flowing',season:'summer',light:'day',weather:'clear' as WeatherMode,quality:navigator.maxTouchPoints>0?'low':'high',resolution:'auto' as RenderResolution,color:'#e5e8e2',volume:.35,muted:false,view:'chase',transmission:'automatic'};
 let settings={...defaults};try{settings={...defaults,...JSON.parse(localStorage.getItem('horizon-settings')||'{}')};}catch{}
 settings.quality=graphicsQuality(settings.quality);
+settings.resolution=renderResolution(settings.resolution);
 if(!['clear','rain','snow'].includes(settings.weather))settings.weather='clear';
 if(settings.season!=='winter'&&settings.weather==='snow')settings.weather='clear';
 const save=()=>{try{localStorage.setItem('horizon-settings',JSON.stringify(settings));}catch{}};
-const renderer=new THREE.WebGLRenderer({canvas:$<HTMLCanvasElement>('world'),antialias:true,powerPreference:'high-performance'});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,qualityPresets[graphicsQuality(settings.quality)].pixelRatio));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+const renderer=new THREE.WebGLRenderer({canvas:$<HTMLCanvasElement>('world'),antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(renderPixelRatio(innerHeight,devicePixelRatio,graphicsQuality(settings.quality),settings.resolution));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
 const scene=new THREE.Scene();scene.background=new THREE.Color('#bcd7ec');scene.fog=new THREE.Fog('#bcd7ec',450,1500);
 const camera=new THREE.PerspectiveCamera(53,innerWidth/innerHeight,.08,2500);
 const sky=createSky();scene.add(sky);
@@ -78,9 +79,10 @@ function atmosphere(){
  scene.environmentIntensity=night?.035:.45;renderer.toneMappingExposure=night?1.2:1.05;headlights=night;vehicle.setLights(headlights);vehicle.setWipers(settings.weather==='rain');
  $('place').textContent=`THE HIGHLANDS · ${night?'NIGHT':settings.season.toUpperCase()}${settings.weather==='clear'?'':` · ${settings.weather.toUpperCase()}`}`;save();
 }
-function quality(){const selected=graphicsQuality(settings.quality),preset=qualityPresets[selected];settings.quality=selected;renderer.setPixelRatio(Math.min(devicePixelRatio,preset.pixelRatio));renderer.shadowMap.enabled=preset.shadowSize>0;sun.castShadow=preset.shadowSize>0;if(preset.shadowSize){sun.shadow.mapSize.set(preset.shadowSize,preset.shadowSize);}sun.shadow.map?.dispose();sun.shadow.map=null;sky.material.uniforms.cloudDetail.value=selected==='low'?0:1;world.setQuality(selected);world.update(drive.z,drive.x);atmosphere();save();}
+function updateRenderResolution(){renderer.setPixelRatio(renderPixelRatio(innerHeight,devicePixelRatio,graphicsQuality(settings.quality),settings.resolution));renderer.setSize(innerWidth,innerHeight);}
+function quality(){const selected=graphicsQuality(settings.quality),preset=qualityPresets[selected];settings.quality=selected;updateRenderResolution();renderer.shadowMap.enabled=preset.shadowSize>0;sun.castShadow=preset.shadowSize>0;if(preset.shadowSize){sun.shadow.mapSize.set(preset.shadowSize,preset.shadowSize);}sun.shadow.map?.dispose();sun.shadow.map=null;sky.material.uniforms.cloudDetail.value=selected==='low'?0:1;world.setQuality(selected);world.update(drive.z,drive.x);atmosphere();save();}
 function syncWeatherOptions(){const snow=$<HTMLSelectElement>('weather').querySelector<HTMLOptionElement>('option[value="snow"]')!;snow.disabled=settings.season!=='winter';if(snow.disabled&&settings.weather==='snow'){settings.weather='clear';$<HTMLSelectElement>('weather').value='clear';}}
-for(const [id,key] of [['seed','seed'],['roadStyle','style'],['season','season'],['light','light'],['weather','weather'],['quality','quality'],['carColor','color'],['volume','volume'],['view','view']] as const){const el=$<HTMLInputElement|HTMLSelectElement>(id);el.value=String(settings[key]);el.addEventListener('change',()=>{if(key==='volume'){settings.volume=Number(el.value);audio.setVolume(settings.volume);}else{(settings as Record<string,unknown>)[key]=el.value;}if(key==='season'){syncWeatherOptions();world.rebuild(landscape,settings.season);world.update(drive.z,drive.x);atmosphere();}if(key==='light'||key==='weather')atmosphere();if(key==='quality')quality();if(key==='color')vehicle.setColor(settings.color);if(key==='view')setView(el.value);save();});}
+for(const [id,key] of [['seed','seed'],['roadStyle','style'],['season','season'],['light','light'],['weather','weather'],['quality','quality'],['resolution','resolution'],['carColor','color'],['volume','volume'],['view','view']] as const){const el=$<HTMLInputElement|HTMLSelectElement>(id);el.value=String(settings[key]);el.addEventListener('change',()=>{if(key==='volume'){settings.volume=Number(el.value);audio.setVolume(settings.volume);}else{(settings as Record<string,unknown>)[key]=el.value;}if(key==='season'){syncWeatherOptions();world.rebuild(landscape,settings.season);world.update(drive.z,drive.x);atmosphere();}if(key==='light'||key==='weather')atmosphere();if(key==='quality')quality();if(key==='resolution'){settings.resolution=renderResolution(settings.resolution);updateRenderResolution();}if(key==='color')vehicle.setColor(settings.color);if(key==='view')setView(el.value);save();});}
 syncWeatherOptions();
 $('random').onclick=()=>{$<HTMLInputElement>('seed').value=Math.random().toString(36).slice(2,10).toUpperCase();settings.seed=$<HTMLInputElement>('seed').value;};$('generate').onclick=()=>{settings.seed=$<HTMLInputElement>('seed').value||'OPEN-ROAD';settings.style=$<HTMLSelectElement>('roadStyle').value;regenerate();setPanel(null);};$<HTMLInputElement>('showStats').onchange=()=>$('stats').hidden=!$<HTMLInputElement>('showStats').checked;
 const fullscreenButton=$<HTMLButtonElement>('fullscreen');
@@ -102,7 +104,7 @@ fullscreenButton.onclick=async()=>{
 document.addEventListener('fullscreenchange',syncFullscreenButton);
 installedFullscreen.addEventListener('change',syncFullscreenButton);
 syncFullscreenButton();
-window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();updateRenderResolution();});
 atmosphere();quality();setView(view);syncTouchGears();$('sound').textContent=settings.muted?'Sound off':'Sound on';
 // Explicit, visible test controls are available only in the local QA URL.
 let qaThrottle=false;
@@ -147,7 +149,7 @@ function frame(now:number){requestAnimationFrame(frame);const raw=(now-last)/100
  world.animate(now/1000,x,z);traffic.update(started&&!paused?dt:0,z,settings.quality==='low');weatherFX.update(now/1000,camera,vehicle.group,settings.weather,headlights,graphicsQuality(settings.quality));renderer.render(scene,camera);frameCount++;if(now-statsStart>1000){fps=frameCount*1000/(now-statsStart);frameCount=0;statsStart=now;const sorted=[...samples].sort((a,b)=>a-b);telemetry.meanMs=samples.reduce((a,b)=>a+b,0)/Math.max(samples.length,1);telemetry.p95Ms=sorted[Math.floor(sorted.length*.95)]||0;telemetry.triangles=renderer.info.render.triangles;telemetry.drawCalls=renderer.info.render.calls;telemetry.chunks=world.chunks.size;telemetry.memoryGeometries=renderer.info.memory.geometries;}
  if(now-lastHUD>120){$('speed').textContent=Math.abs(drive.speed*3.6).toFixed(0);$('gearReadout').textContent=`${settings.transmission==='manual'?'M':'AUTO'} · ${drive.gear<0?'R':drive.gear===0?'N':drive.gear} · ${Math.round(drive.rpm)} RPM`;$('distance').textContent=(drive.distance/1000).toFixed(1);$('stats').textContent=`${fps.toFixed(0)} FPS · ${telemetry.p95Ms.toFixed(1)} ms p95\n${telemetry.drawCalls} draws · ${(telemetry.triangles/1000).toFixed(0)}k triangles\n${telemetry.chunks} chunks · ${telemetry.elapsed.toFixed(0)}s driving`;lastHUD=now;}
  // A read-only DOM status supports reproducible browser verification.
- document.body.dataset.drivingState=JSON.stringify({started,paused,auto:drive.auto,speed:drive.speed,x:drive.x,z:drive.z,y:drive.y,lateral:landscape.lateral(drive.x,drive.z),distance:drive.distance,view,lookYaw:mouseYaw,lookPitch:mousePitch,gear:drive.gear,rpm:drive.rpm,transmission:drive.transmission,headlights,quality:settings.quality,weather:settings.weather,terrainTiles:world.fields.size,cameraDistance:camera.position.distanceTo(vehicle.group.position),cameraSeatError:view==='interior'?camera.position.distanceTo(desired):null,season:settings.season,slip:drive.slip,roll:drive.roll,pitch:drive.pitch,handbrake:controls.handbrake,...telemetry});prevYaw=yaw;
+ document.body.dataset.drivingState=JSON.stringify({started,paused,auto:drive.auto,speed:drive.speed,x:drive.x,z:drive.z,y:drive.y,lateral:landscape.lateral(drive.x,drive.z),distance:drive.distance,view,lookYaw:mouseYaw,lookPitch:mousePitch,gear:drive.gear,rpm:drive.rpm,transmission:drive.transmission,headlights,quality:settings.quality,resolution:settings.resolution,renderWidth:renderer.domElement.width,renderHeight:renderer.domElement.height,weather:settings.weather,terrainTiles:world.fields.size,cameraDistance:camera.position.distanceTo(vehicle.group.position),cameraSeatError:view==='interior'?camera.position.distanceTo(desired):null,season:settings.season,slip:drive.slip,roll:drive.roll,pitch:drive.pitch,handbrake:controls.handbrake,...telemetry});prevYaw=yaw;
 }
 requestAnimationFrame(frame);
 

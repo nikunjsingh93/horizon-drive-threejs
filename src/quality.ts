@@ -1,4 +1,14 @@
 export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra';
+export type RenderResolution = 'auto' | '640' | '720' | '1080' | '1440' | '2160';
+
+export function renderResolution(value:string):RenderResolution {
+  return ['640','720','1080','1440','2160'].includes(value)?value as RenderResolution:'auto';
+}
+
+export function renderPixelRatio(cssHeight:number,deviceRatio:number,quality:GraphicsQuality,resolution:RenderResolution):number {
+  if(resolution==='auto')return Math.min(deviceRatio,qualityPresets[quality].pixelRatio);
+  return Math.min(4,Number(resolution)/Math.max(1,cssHeight));
+}
 
 export const qualityPresets = {
   low: { pixelRatio: 0.55, tileRadius: 1, terrainSegments: 16, chunkBehind: 1, chunkAhead: 1, vegetation: 0.25, fogFar: 180, shadowSize: 0 },
