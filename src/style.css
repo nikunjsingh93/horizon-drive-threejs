@@ -17,6 +17,7 @@ html.touch-device #touch .touch-gears,html.touch-device #touch .touch-steer,html
 html.touch-device #touch button{display:block;flex:1 1 0;min-width:0;min-height:80px;padding:10px 8px;border:1px solid #ffffff80;border-radius:8px;background:#1b302ab8;color:white;font-size:12px;touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none}
 html.touch-device #touch button:active{background:#c9dfb680;color:#14221c}
 html.touch-device #touch .touch-pedals>button{width:100%}
+html:not(.touch-device) #touch{display:none!important}
 html.touch-device #hint{display:none}
 html.touch-device body:not(.driving) #touch{display:none}
 @media (orientation:landscape) and (max-height:600px){

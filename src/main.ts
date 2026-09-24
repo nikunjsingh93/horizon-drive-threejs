@@ -3,19 +3,19 @@ import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {Landscape,Driving,clamp,damp,type Input} from './simulation';
 import {WorldView,createSky} from './world';
 import {createVehicle} from './vehicle';
+import {Traffic} from './traffic';
 import {DriveAudio} from './audio';
 import {graphicsQuality,qualityPresets} from './quality';
 import './style.css';
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
-const touchPointer=matchMedia('(any-pointer: coarse)');
-const compactLandscape=matchMedia('(orientation: landscape) and (max-height: 600px) and (max-width: 950px)');
+const touchPointer=matchMedia('(pointer: coarse)');
+let observedTouch=false;
 function showTouchControls(){
-  document.documentElement.classList.toggle('touch-device',navigator.maxTouchPoints>0||touchPointer.matches||compactLandscape.matches||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+  document.documentElement.classList.toggle('touch-device',observedTouch||touchPointer.matches||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 }
 showTouchControls();
 touchPointer.addEventListener('change',showTouchControls);
-compactLandscape.addEventListener('change',showTouchControls);
-window.addEventListener('pointerdown',event=>{if(event.pointerType==='touch')document.documentElement.classList.add('touch-device');},{passive:true});
+window.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'){observedTouch=true;showTouchControls();}},{passive:true});
 const defaults={seed:'OPEN-ROAD',style:'flowing',season:'summer',light:'day',quality:navigator.maxTouchPoints>0?'low':'high',color:'#e5e8e2',volume:.35,muted:false,view:'chase',transmission:'automatic'};
 let settings={...defaults};try{settings={...defaults,...JSON.parse(localStorage.getItem('horizon-settings')||'{}')};}catch{}
 settings.quality=graphicsQuality(settings.quality);
@@ -28,6 +28,7 @@ const hemi=new THREE.HemisphereLight(0xd8eafc,0x787c57,2.3);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xfff1d5,3);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-45,right:45,top:45,bottom:-45,near:1,far:240});sun.shadow.bias=-.00025;sun.shadow.normalBias=.06;scene.add(sun,sun.target);
 const pmrem=new THREE.PMREMGenerator(renderer);const env=pmrem.fromScene(new RoomEnvironment(),.04);scene.environment=env.texture;scene.environmentIntensity=.45;pmrem.dispose();
 let landscape=new Landscape(settings.seed,settings.style);let drive=new Driving(landscape);drive.transmission=settings.transmission;const world=new WorldView(scene,landscape);world.quality=graphicsQuality(settings.quality);world.season=settings.season;world.update(drive.z,drive.x);
+const traffic=new Traffic(scene,landscape);
 const vehicle=createVehicle();vehicle.setColor(settings.color);scene.add(vehicle.group);
 const audio=new DriveAudio();audio.setVolume(settings.volume);audio.setMuted(settings.muted);
 let started=false,paused=false,camReady=false,last=performance.now(),accumulator=0,view=settings.view,frameCount=0,statsStart=performance.now(),fps=0,lastHUD=0,prevYaw=drive.heading;
@@ -62,7 +63,7 @@ function shiftGear(direction:number){if(settings.transmission!=='manual'){toast(
 $('gearDown').onclick=()=>shiftGear(-1);$('gearUp').onclick=()=>shiftGear(1);
 $<HTMLSelectElement>('transmission').value=settings.transmission;
 $('transmission').onchange=()=>{settings.transmission=$<HTMLSelectElement>('transmission').value;drive.transmission=settings.transmission;syncTouchGears();save();toast(settings.transmission==='manual'?'Manual · Q down / E up · automatic clutch':'Automatic transmission');};
-function regenerate(){landscape=new Landscape(settings.seed,settings.style);drive=new Driving(landscape);drive.transmission=settings.transmission;world.rebuild(landscape,settings.season);world.update(drive.z,drive.x);previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};camReady=false;syncAuto();telemetry.seed=settings.seed;telemetry.maxLateral=0;save();toast('A new road is waiting');}
+function regenerate(){landscape=new Landscape(settings.seed,settings.style);drive=new Driving(landscape);drive.transmission=settings.transmission;world.rebuild(landscape,settings.season);world.update(drive.z,drive.x);traffic.reset(landscape,drive.z);previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};camReady=false;syncAuto();telemetry.seed=settings.seed;telemetry.maxLateral=0;save();toast('A new road is waiting');}
 function atmosphere(){
  const night=settings.light==='night',golden=settings.light==='golden',overcast=settings.light==='overcast';
  const top=night?'#030817':golden?'#7192b0':overcast?'#83949e':'#367dcc',bottom=night?'#15243a':golden?'#e3b184':overcast?'#b7c3c7':'#bbd0dd';
@@ -101,10 +102,11 @@ atmosphere();quality();setView(view);syncTouchGears();$('sound').textContent=set
 let qaThrottle=false;
 if(new URLSearchParams(location.search).has('qa')){
  const bar=document.createElement('div');bar.style.cssText='position:fixed;top:115px;left:24px;background:#142423ee;padding:12px;z-index:20';bar.textContent='Playtest: ';
- for(const label of ['Off-road drive','Pond visit','Road speed','Stop test']){const b=document.createElement('button');b.textContent=label;b.style.padding='8px';bar.append(b);b.onclick=()=>{
+ for(const label of ['Off-road drive','Dirt road','Pond visit','Road speed','Stop test']){const b=document.createElement('button');b.textContent=label;b.style.padding='8px';bar.append(b);b.onclick=()=>{
  begin();drive.auto=false;syncAuto();qaThrottle=label!=='Stop test';if(!qaThrottle)return;
  drive.reset();drive.heading=drive.travelHeading=label==='Off-road drive'?-Math.PI/2:0;
  if(label==='Off-road drive'){drive.x=landscape.roadX(30)-65;drive.z=30;drive.speed=28;}
+ if(label==='Dirt road'){drive.z=460;drive.x=landscape.trailX(drive.z);drive.heading=drive.travelHeading=Math.atan((landscape.trailX(drive.z+1)-landscape.trailX(drive.z-1))/2);drive.speed=14;qaThrottle=false;}
  if(label==='Road speed'){drive.heading=drive.travelHeading=Math.atan(landscape.slope(drive.z));drive.speed=28;drive.auto=true;qaThrottle=false;syncAuto();}
  if(label==='Pond visit'){outer:for(let tx=-2;tx<=2;tx++)for(let tz=0;tz<=3;tz++){const p=landscape.pond(tx,tz);if(p){drive.x=p.x;drive.z=p.z-p.rz*1.7;drive.speed=0;qaThrottle=false;break outer;}}}
  drive.y=landscape.surface(drive.x,drive.z)+.035;previous={x:drive.x,y:drive.y,z:drive.z,heading:drive.heading};camReady=false;
@@ -136,7 +138,7 @@ function frame(now:number){requestAnimationFrame(frame);const raw=(now-last)/100
  if(view!=='interior')camera.up.set(0,1,0);
  if(!camReady||view!=='chase'){camera.position.copy(desired);camLook.copy(look);camReady=true;}else{camera.position.lerp(desired,1-Math.exp(-(view==='chase'?5:18)*dt));camLook.lerp(look,1-Math.exp(-(view==='chase'?7:20)*dt));}camera.lookAt(camLook);camera.fov=damp(camera.fov,view==='chase'?53:65,3,dt);camera.updateProjectionMatrix();sky.position.copy(camera.position);camera.updateMatrixWorld();sky.material.uniforms.cameraWorld.value.copy(camera.matrixWorld);sky.material.uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);
  sun.position.set(x-70,y+90,z+50);sun.target.position.set(x,y,z);audio.update(paused?0:drive.speed,paused?0:drive.throttle,drive.offroad,paused?0:drive.slip,dt,drive.rpm);
- world.animate(now/1000);renderer.render(scene,camera);frameCount++;if(now-statsStart>1000){fps=frameCount*1000/(now-statsStart);frameCount=0;statsStart=now;const sorted=[...samples].sort((a,b)=>a-b);telemetry.meanMs=samples.reduce((a,b)=>a+b,0)/Math.max(samples.length,1);telemetry.p95Ms=sorted[Math.floor(sorted.length*.95)]||0;telemetry.triangles=renderer.info.render.triangles;telemetry.drawCalls=renderer.info.render.calls;telemetry.chunks=world.chunks.size;telemetry.memoryGeometries=renderer.info.memory.geometries;}
+ world.animate(now/1000);traffic.update(started&&!paused?dt:0,z,settings.quality==='low');renderer.render(scene,camera);frameCount++;if(now-statsStart>1000){fps=frameCount*1000/(now-statsStart);frameCount=0;statsStart=now;const sorted=[...samples].sort((a,b)=>a-b);telemetry.meanMs=samples.reduce((a,b)=>a+b,0)/Math.max(samples.length,1);telemetry.p95Ms=sorted[Math.floor(sorted.length*.95)]||0;telemetry.triangles=renderer.info.render.triangles;telemetry.drawCalls=renderer.info.render.calls;telemetry.chunks=world.chunks.size;telemetry.memoryGeometries=renderer.info.memory.geometries;}
  if(now-lastHUD>120){$('speed').textContent=Math.abs(drive.speed*3.6).toFixed(0);$('gearReadout').textContent=`${settings.transmission==='manual'?'M':'AUTO'} · ${drive.gear<0?'R':drive.gear===0?'N':drive.gear} · ${Math.round(drive.rpm)} RPM`;$('distance').textContent=(drive.distance/1000).toFixed(1);$('stats').textContent=`${fps.toFixed(0)} FPS · ${telemetry.p95Ms.toFixed(1)} ms p95\n${telemetry.drawCalls} draws · ${(telemetry.triangles/1000).toFixed(0)}k triangles\n${telemetry.chunks} chunks · ${telemetry.elapsed.toFixed(0)}s driving`;lastHUD=now;}
  // A read-only DOM status supports reproducible browser verification.
  document.body.dataset.drivingState=JSON.stringify({started,paused,auto:drive.auto,speed:drive.speed,x:drive.x,z:drive.z,y:drive.y,lateral:landscape.lateral(drive.x,drive.z),distance:drive.distance,view,lookYaw:mouseYaw,lookPitch:mousePitch,gear:drive.gear,rpm:drive.rpm,transmission:drive.transmission,headlights,quality:settings.quality,terrainTiles:world.fields.size,cameraDistance:camera.position.distanceTo(vehicle.group.position),cameraSeatError:view==='interior'?camera.position.distanceTo(desired):null,season:settings.season,slip:drive.slip,roll:drive.roll,pitch:drive.pitch,handbrake:controls.handbrake,...telemetry});prevYaw=yaw;

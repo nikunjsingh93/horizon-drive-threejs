@@ -9,6 +9,7 @@ export function createScenery(
   height: (x: number, z: number) => number,
   season: string,
   density = 1,
+  trailDistance?: (x:number,z:number)=>number,
 ): THREE.Group {
   const group = new THREE.Group();
   const random = randomSource(seed >>> 0);
@@ -62,6 +63,7 @@ export function createScenery(
   const endZ = startZ + length;
   const span = Math.max(0, length);
   const count = Math.min(180, Math.round(span * 0.72 * density));
+  const clearOfTrail=(x:number,z:number,margin:number)=>!trailDistance||Math.abs(trailDistance(x,z))>margin;
 
   // Trees arrive in small groves with broad open gaps between them, but stay
   // close enough to read as individual trees from the chase camera.
@@ -72,6 +74,7 @@ export function createScenery(
     const side = i % 2 === 0 ? 1 : -1;
     const offset = 7.5 + Math.pow(random(), 1.6) * 23;
     const x = roadX(z) + side * offset;
+    if(!clearOfTrail(x,z,16))continue;
     const scale = .9 + random() * 0.55;
     const isConifer = random() < (winter ? 0.52 : 0.28);
     dummy.position.set(x, height(x, z), z);
@@ -108,6 +111,7 @@ export function createScenery(
     const z = startZ + random() * span;
     const side = random() < 0.5 ? -1 : 1;
     const x = roadX(z) + side * (6.5 + random() * 17);
+    if(!clearOfTrail(x,z,6))continue;
     const y = height(x, z);
     const scale = 0.45 + random() * 0.65;
     dummy.position.set(x, y, z);
@@ -133,6 +137,7 @@ export function createScenery(
     const side = random() < 0.5 ? -1 : 1;
     const offset = 5.35 + random() * 5.4;
     const x = roadX(z) + side * offset;
+    if(!clearOfTrail(x,z,5))continue;
     dummy.position.set(x, height(x, z), z);
     dummy.rotation.set(0, random() * Math.PI * 2, 0);
     const s = 0.45 + random() * 0.95;
@@ -154,6 +159,7 @@ export function createScenery(
     const z = startZ + random() * span;
     const side = random() < 0.5 ? -1 : 1;
     const x = roadX(z) + side * (6.2 + Math.pow(random(),2) * 32);
+    if(!clearOfTrail(x,z,8))continue;
     dummy.position.set(x, height(x, z), z);
     dummy.rotation.set(random() * 0.25, random() * Math.PI * 2, random() * 0.25);
     const sx = 0.45 + random() * 1.15;
@@ -737,7 +743,7 @@ function makeDeerGeometry(): THREE.BufferGeometry {
   return combine(parts);
 }
 
-function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:number)=>number;lateral:(x:number,z:number)=>number;pond:(x:number,z:number)=>{x:number;z:number;rx:number;rz:number}|null}, tx:number,tz:number, season:string): void {
+function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:number)=>number;lateral:(x:number,z:number)=>number;trailDistance?:(x:number,z:number)=>number;pond:(x:number,z:number)=>{x:number;z:number;rx:number;rz:number}|null}, tx:number,tz:number, season:string): void {
   const capacity=18;
   // Instance colors are multiplied by the material; a white base preserves
   // the intended fur palette instead of turning every animal nearly black.
@@ -759,7 +765,7 @@ function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:nu
   const pond=world.pond(tx,tz);
   for(let tries=0;tries<capacity*12 && count<capacity;tries++){
     const x=tx*192+rng()*192,z=tz*192+rng()*192;
-    if(Math.abs(world.lateral(x,z))<17||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.4)continue;
+    if(Math.abs(world.lateral(x,z))<17||world.trailDistance&&Math.abs(world.trailDistance(x,z))<8||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.4)continue;
     const fox=(count%7===0 && season!=='winter');
     const scale=fox?1.48:1.28+rng()*.24; const y=world.height(x,z)+.22*scale; const heading=rng()*Math.PI*2;
     d.position.set(x,y,z); d.rotation.set(0,heading,0); d.scale.setScalar(scale); d.updateMatrix(); bodies.setMatrixAt(count,d.matrix);
@@ -780,7 +786,7 @@ function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:nu
   let deerCount=0;
   for(let tries=0;tries<48&&deerCount<4;tries++){
     const x=tx*192+rng()*192,z=tz*192+rng()*192;
-    if(Math.abs(world.lateral(x,z))<20||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.35)continue;
+    if(Math.abs(world.lateral(x,z))<20||world.trailDistance&&Math.abs(world.trailDistance(x,z))<10||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.35)continue;
     d.position.set(x,world.height(x,z),z);d.rotation.set(0,rng()*Math.PI*2,0);d.scale.setScalar(1.08+rng()*.20);d.updateMatrix();deer.setMatrixAt(deerCount++,d.matrix);
   }
   addInstanced(g,bodies,count); addInstanced(g,heads,count); addInstanced(g,ears,count*2); addInstanced(g,tails,count); addInstanced(g,legs,count*4); addInstanced(g,eyes,count*2); addInstanced(g,noses,count); addInstanced(g,deer,deerCount);
@@ -789,7 +795,7 @@ function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:nu
 
 
 /** Sparse groves and dense ground cover continue in every direction away from the road. */
-export function createWilderness(tx:number,tz:number,world:{seed:number;height:(x:number,z:number)=>number;lateral:(x:number,z:number)=>number;pond:(x:number,z:number)=>{x:number;z:number;rx:number;rz:number}|null},season:string,density=1){
+export function createWilderness(tx:number,tz:number,world:{seed:number;height:(x:number,z:number)=>number;lateral:(x:number,z:number)=>number;trailDistance?:(x:number,z:number)=>number;pond:(x:number,z:number)=>{x:number;z:number;rx:number;rz:number}|null},season:string,density=1){
  const g=new THREE.Group(),rng=randomSource(world.seed^Math.imul(tx,73856093)^Math.imul(tz,19349663));
  const mat=new THREE.MeshStandardMaterial({color:season==='winter'?0xc9d1c4:0x627942,map:makeBroadleafTexture(),alphaTest:.34,side:THREE.DoubleSide,roughness:1,vertexColors:true});
  const foliage=new THREE.InstancedMesh(makeBroadleafCrownGeometry('oak'),mat,40);
@@ -800,7 +806,8 @@ export function createWilderness(tx:number,tz:number,world:{seed:number;height:(
  const treeLimit=Math.min(40,Math.ceil(40*density)),shrubLimit=Math.min(70,Math.ceil(70*density)),grassLimit=Math.min(1800,Math.ceil(1800*density));
  for(let i=0;i<2000*density;i++){
  const x=tx*192+rng()*192,z=tz*192+rng()*192;
- if(Math.abs(world.lateral(x,z))<38||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.25)continue;
+ const trailClearance=i<140*density?16:i<120*density?9:5;
+ if(Math.abs(world.lateral(x,z))<38||world.trailDistance&&Math.abs(world.trailDistance(x,z))<trailClearance||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.25)continue;
  d.position.set(x,world.height(x,z),z);d.rotation.set(0,rng()*Math.PI*2,0);d.scale.setScalar(.85+rng()*.6);d.updateMatrix();
  if(i<140*density&&trees<treeLimit){foliage.setMatrixAt(trees,d.matrix);trunks.setMatrixAt(trees++,d.matrix);}
  else if(i<120*density&&shrubs<shrubLimit){shrub.setMatrixAt(shrubs++,d.matrix);}

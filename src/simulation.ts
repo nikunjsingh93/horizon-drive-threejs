@@ -10,16 +10,19 @@ export class Landscape {
  slope(z:number){return (this.roadX(z+.1)-this.roadX(z-.1))/.2;}
  stretch(z:number){return Math.sqrt(1+this.slope(z)**2);}
  lateral(x:number,z:number){return (x-this.roadX(z))/this.stretch(z);}
+ trailX(z:number){const weave=Math.sin(Math.PI*z/1200);return this.roadX(z)+(7+68*weave*weave+7*Math.sin(z*.012+this.phase)*weave*weave)*this.stretch(z);}
+ trailY(z:number){return this.rawHeight(this.trailX(z),z);}
+ trailDistance(x:number,z:number){const slope=(this.trailX(z+.2)-this.trailX(z-.2))/.4;return (x-this.trailX(z))/Math.sqrt(1+slope*slope);}
  rawHeight(x:number,z:number){const d=this.lateral(x,z),a=Math.abs(d),p=this.phase;const t=clamp((a-5.1)/100,0,1),blend=t*t*(3-2*t);const hills=12*Math.sin(x*.008+z*.002+p)+9*Math.sin(z*.008+x*.003+p)+3*Math.sin(x*.024-z*.009);const contour=Math.tanh(d/65)*(19+8*Math.sin(z*.002+p));const distant=clamp((a-200)/600,0,1)*(38+30*Math.sin(x*.003+z*.001+p));return this.roadY(z)-.12+blend*(hills+contour+distant)+.04*Math.sin(x*1.7+z*.8)*blend;}
  pond(tx:number,tz:number){
  const key=`${tx}:${tz}`;if(this.pondCache.has(key))return this.pondCache.get(key)!;
  const h=hashSeed(`${this.seed}:${tx}:${tz}`),x=tx*192+70+(h%53),z=tz*192+70+((h>>>8)%53);
  let pond:null|{x:number;z:number;rx:number;rz:number;level:number}=null;
- if(h%4===0&&Math.abs(this.lateral(x,z))>85){const rx=17+(h%14),rz=13+((h>>>5)%12);let level=this.rawHeight(x,z)-1.1;
+ if(h%4===0&&Math.abs(this.lateral(x,z))>85&&Math.abs(this.trailDistance(x,z))>55){const rx=17+(h%14),rz=13+((h>>>5)%12);let level=this.rawHeight(x,z)-1.1;
  for(let i=0;i<16;i++){const a=i*Math.PI/8;level=Math.min(level,this.rawHeight(x+Math.cos(a)*rx*1.6,z+Math.sin(a)*rz*1.6)-.4);}pond={x,z,rx,rz,level};}
  if(this.pondCache.size>512)this.pondCache.delete(this.pondCache.keys().next().value!);this.pondCache.set(key,pond);return pond;
  }
- height(x:number,z:number){let y=this.rawHeight(x,z);const p=this.pond(Math.floor(x/192),Math.floor(z/192));
+ height(x:number,z:number){let y=this.rawHeight(x,z);const trail=Math.abs(this.trailDistance(x,z));if(trail<7){const t=clamp((trail-2.6)/4.4,0,1),blend=t*t*(3-2*t);y=this.trailY(z)*(1-blend)+y*blend;}const p=this.pond(Math.floor(x/192),Math.floor(z/192));
  if(p){const r=Math.hypot((x-p.x)/p.rx,(z-p.z)/p.rz);if(r<1.6){const t=clamp((r-.82)/.78,0,1),blend=t*t*(3-2*t);y=(p.level-.85)*(1-blend)+y*blend;}}return y;}
  surface(x:number,z:number){
  if(Math.abs(this.lateral(x,z))<4.16)return this.roadY(z);

@@ -6,8 +6,35 @@ import {WorldView} from '../src/world';
 const drawing=new Proxy({createImageData:(w:number,h:number)=>({data:new Uint8ClampedArray(w*h*4)})},{get:(obj,key)=>key in obj?(obj as any)[key]:()=>{}});
 (globalThis as any).document={createElement:()=>({width:0,height:0,getContext:()=>drawing})};
 const scene=new THREE.Scene(),land=new Landscape('OPEN-ROAD'),world=new WorldView(scene,land);
+for(const z of [-1200,-1,0,1,179.99,180,460,1199.99,1200,1200.01,2400]){
+ const x=land.trailX(z);
+ assert.ok(Math.abs(land.height(x,z)-land.trailY(z))<.001,'dirt track must match terrain height');
+ assert.ok(Math.abs(land.trailX(z+.001)-x)<.02,'dirt track must remain continuous');
+}
 let disposals=0;
 world.update(30,0);
+const matrix=new THREE.Matrix4(),position=new THREE.Vector3();
+for(const chunk of world.chunks.values()){
+ const roadside=chunk.children.find(child=>child instanceof THREE.Group) as THREE.Group;
+ assert.ok(roadside,'roadside vegetation should be present');
+ roadside.traverse(object=>{
+  if(!(object instanceof THREE.InstancedMesh))return;
+  for(let i=0;i<object.count;i++){
+   object.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);
+   assert.ok(Math.abs(land.trailDistance(position.x,position.z))>4.8,'roadside vegetation must clear the dirt track');
+  }
+ });
+}
+for(const field of world.fields.values()){
+ const wilderness=field.children[1];
+ wilderness.traverse(object=>{
+  if(!(object instanceof THREE.InstancedMesh))return;
+  for(let i=0;i<object.count;i++){
+   object.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);
+   assert.ok(Math.abs(land.trailDistance(position.x,position.z))>4.8,'wilderness vegetation must clear the dirt track');
+  }
+ });
+}
 for(const g of world.fields.values())g.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.addEventListener('dispose',()=>disposals++);});
 for(const [x,z] of [[2100,30],[2100,2100],[-2300,-2100],[0,30]]){
  world.update(z,x);assert.equal(world.fields.size,49);assert.equal(world.chunks.size,11);
