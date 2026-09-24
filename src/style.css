@@ -14,7 +14,7 @@
 html.touch-device #touch{display:flex;position:fixed;z-index:20;left:calc(18px + env(safe-area-inset-left));right:calc(18px + env(safe-area-inset-right));bottom:calc(54px + env(safe-area-inset-bottom));justify-content:space-between;align-items:flex-end;gap:18px;pointer-events:none}
 html.touch-device #touch .touch-left,html.touch-device #touch .touch-pedals{display:flex;flex-direction:column;gap:8px;width:min(42vw,180px);flex:0 0 auto}
 html.touch-device #touch .touch-gears,html.touch-device #touch .touch-steer,html.touch-device #touch .touch-brake-row{display:flex;gap:8px}
-html.touch-device #touch button{display:block;flex:1 1 0;min-width:0;min-height:44px;padding:10px 8px;border:1px solid #ffffff80;border-radius:8px;background:#1b302ab8;color:white;font-size:12px;touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none}
+html.touch-device #touch button{display:block;flex:1 1 0;min-width:0;min-height:80px;padding:10px 8px;border:1px solid #ffffff80;border-radius:8px;background:#1b302ab8;color:white;font-size:12px;touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none}
 html.touch-device #touch button:active{background:#c9dfb680;color:#14221c}
 html.touch-device #touch .touch-pedals>button{width:100%}
 html.touch-device #hint{display:none}
@@ -30,6 +30,6 @@ html.touch-device body:not(.driving) #touch{display:none}
   html.touch-device nav button{padding:4px 0}
   html.touch-device #touch{bottom:calc(45px + env(safe-area-inset-bottom))}
   html.touch-device #touch .touch-left,html.touch-device #touch .touch-pedals{width:min(28vw,190px)}
-  html.touch-device #touch button{min-height:42px;padding:8px 6px}
+  html.touch-device #touch button{min-height:76px;padding:8px 6px}
   html.touch-device .panel,html.touch-device .panel.right{left:calc(14px + env(safe-area-inset-left));right:auto;bottom:calc(44px + env(safe-area-inset-bottom));width:min(350px,calc(100vw - 28px - env(safe-area-inset-left) - env(safe-area-inset-right)));max-height:calc(100dvh - 65px);overflow:auto;z-index:30}
 }
