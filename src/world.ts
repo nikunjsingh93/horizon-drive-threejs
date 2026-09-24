@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {Landscape,clamp} from './simulation';
 import {createScenery,createWilderness} from './scenery';
+import {qualityPresets,type GraphicsQuality} from './quality';
 const CHUNK=180;
 function texture(kind:'grass'|'road'){
  const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d')!;const img=ctx.createImageData(256,256);let s=198731;const rand=()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};
@@ -12,6 +13,7 @@ function waterTexture(){const c=document.createElement('canvas');c.width=c.heigh
 export class WorldView {
  fields=new Map<string,THREE.Group>();
  chunks=new Map<number,THREE.Group>();waterNormal=waterTexture();grass=texture('grass');asphalt=texture('road');season='summer';
+ quality:GraphicsQuality='high';
  terrainMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,map:this.grass});
  roadMat=new THREE.MeshStandardMaterial({color:0x777773,roughness:.95,map:this.asphalt});
  lineMat=new THREE.MeshStandardMaterial({color:0xecebd6,roughness:.9});
@@ -20,10 +22,11 @@ export class WorldView {
  mudMat=new THREE.MeshStandardMaterial({color:0x46392e,roughness:1});
  debrisMat=new THREE.MeshStandardMaterial({color:0x4e4b42,roughness:1});
  constructor(public scene:THREE.Scene,public landscape:Landscape){}
- update(z:number,x=this.landscape.roadX(z)){this.updateFields(x,z);const center=Math.floor(z/CHUNK);const needed=[];for(let i=center-2;i<=center+8;i++)needed.push(i);for(const [i,g] of this.chunks){if(!needed.includes(i)){this.dispose(g);this.chunks.delete(i);}}
+ update(z:number,x=this.landscape.roadX(z)){this.updateFields(x,z);const center=Math.floor(z/CHUNK),preset=qualityPresets[this.quality];const needed=[];for(let i=center-preset.chunkBehind;i<=center+preset.chunkAhead;i++)needed.push(i);for(const [i,g] of this.chunks){if(!needed.includes(i)){this.dispose(g);this.chunks.delete(i);}}
  for(const i of needed)if(!this.chunks.has(i)){const g=this.chunk(i);this.chunks.set(i,g);this.scene.add(g);}
  }
  animate(time:number){for(const chunk of this.chunks.values())for(const child of chunk.children){const animateBirds=child.userData.animateBirds as ((time:number)=>void)|undefined;animateBirds?.(time);}}
+ setQuality(quality:GraphicsQuality){if(this.quality===quality)return;this.quality=quality;this.rebuild();}
  rebuild(landscape=this.landscape,season=this.season){this.landscape=landscape;this.season=season;for(const g of this.chunks.values())this.dispose(g);this.chunks.clear();for(const g of this.fields.values())this.dispose(g);this.fields.clear();}
  dispose(g:THREE.Group){this.scene.remove(g);const shared=new Set<THREE.Material>([this.terrainMat,this.roadMat,this.lineMat,this.vergeMat,this.dirtMat,this.mudMat,this.debrisMat]);const done=new Set<THREE.Material>();g.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];for(const m of ms)if(!shared.has(m)&&!done.has(m)){m.dispose();done.add(m);}}});}
  ribbon(start:number,length:number,left:number,right:number,mat:THREE.Material,yoff:number){const w=this.landscape,steps=Math.ceil(length/3),pos=[],uv=[],ind=[];for(let i=0;i<=steps;i++){const z=start+i/steps*length;for(const off of [left,right]){pos.push(w.roadX(z)+off*w.stretch(z),w.roadY(z)+yoff,z);uv.push(off*.32,z*.32);}}for(let i=0;i<steps;i++){const a=i*2;ind.push(a,a+2,a+1,a+1,a+2,a+3);}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(ind);geo.computeVertexNormals();const m=new THREE.Mesh(geo,mat);m.receiveShadow=true;return m;}
@@ -36,24 +39,24 @@ export class WorldView {
  for(const edge of [-3.91,3.80])g.add(this.ribbon(start,CHUNK,edge,edge+.11,this.lineMat,.041));
  const solid=Math.abs(w.slope(start+90)-w.slope(start))>.2;
  if(solid){g.add(this.ribbon(start,CHUNK,-.15,-.04,this.lineMat,.043),this.ribbon(start,CHUNK,.04,.15,this.lineMat,.043));}else g.add(this.dashes(start));
- g.add(createScenery(w.seed^Math.imul(index,73856093),start,CHUNK,z=>w.roadX(z),(x,z)=>w.height(x,z),this.season));
+ g.add(createScenery(w.seed^Math.imul(index,73856093),start,CHUNK,z=>w.roadX(z),(x,z)=>w.height(x,z),this.season,qualityPresets[this.quality].vegetation));
  this.roadside(g,start,index);return g;
  }
  updateFields(x:number,z:number){
- const cx=Math.floor(x/192),cz=Math.floor(z/192),needed=new Set<string>();
- for(let a=cx-3;a<=cx+3;a++)for(let b=cz-3;b<=cz+3;b++){
+ const cx=Math.floor(x/192),cz=Math.floor(z/192),needed=new Set<string>(),radius=qualityPresets[this.quality].tileRadius;
+ for(let a=cx-radius;a<=cx+radius;a++)for(let b=cz-radius;b<=cz+radius;b++){
  const key=`${a}:${b}`;needed.add(key);if(!this.fields.has(key)){const g=this.field(a,b);this.fields.set(key,g);this.scene.add(g);}}
  for(const [key,g] of this.fields)if(!needed.has(key)){this.dispose(g);this.fields.delete(key);}
  }
  field(tx:number,tz:number){
- const group=new THREE.Group(),w=this.landscape,pos:number[]=[],uv:number[]=[],colors:number[]=[],ix:number[]=[],c=new THREE.Color(),n=48;
+ const group=new THREE.Group(),w=this.landscape,pos:number[]=[],uv:number[]=[],colors:number[]=[],ix:number[]=[],c=new THREE.Color(),n=qualityPresets[this.quality].terrainSegments;
  for(let j=0;j<=n;j++)for(let i=0;i<=n;i++){
- const x=tx*192+i*4,z=tz*192+j*4,y=w.height(x,z);pos.push(x,y,z);uv.push(x*.12,z*.12);
+ const x=tx*192+i*192/n,z=tz*192+j*192/n,y=w.height(x,z);pos.push(x,y,z);uv.push(x*.12,z*.12);
  const patch=Math.sin(x*.016+z*.006)*Math.cos(z*.011-x*.004);
  c.setHSL(this.season==='winter'?.55:this.season==='autumn'?.13:.21,this.season==='winter'?.09:.30,this.season==='winter'?.79:.33+patch*.06,THREE.SRGBColorSpace);colors.push(c.r,c.g,c.b);
  if(i<n&&j<n){const a=j*(n+1)+i;ix.push(a,a+n+1,a+1,a+1,a+n+1,a+n+2);}}
  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(ix);geo.computeVertexNormals();const ground=new THREE.Mesh(geo,this.terrainMat);ground.receiveShadow=true;group.add(ground);
- group.add(createWilderness(tx,tz,w,this.season));
+ group.add(createWilderness(tx,tz,w,this.season,qualityPresets[this.quality].vegetation));
  const pond=w.pond(tx,tz);if(pond){
  const waterGeo=new THREE.CircleGeometry(1,64);waterGeo.rotateX(-Math.PI/2);waterGeo.scale(pond.rx,1,pond.rz);
  const wp=waterGeo.getAttribute('position');for(let i=1;i<wp.count;i++){const a=(i-1)/64*Math.PI*2;let lo=.8,hi=1.6;for(let n=0;n<12;n++){const r=(lo+hi)/2;if(w.surface(pond.x+Math.cos(a)*pond.rx*r,pond.z-Math.sin(a)*pond.rz*r)<pond.level)lo=r;else hi=r;}wp.setXYZ(i,Math.cos(a)*pond.rx*lo,0,-Math.sin(a)*pond.rz*lo);}wp.needsUpdate=true;

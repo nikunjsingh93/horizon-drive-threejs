@@ -8,6 +8,7 @@ export function createScenery(
   roadX: (z: number) => number,
   height: (x: number, z: number) => number,
   season: string,
+  density = 1,
 ): THREE.Group {
   const group = new THREE.Group();
   const random = randomSource(seed >>> 0);
@@ -60,7 +61,7 @@ export function createScenery(
   let rockCount = 0;
   const endZ = startZ + length;
   const span = Math.max(0, length);
-  const count = Math.min(180, Math.round(span * 0.72));
+  const count = Math.min(180, Math.round(span * 0.72 * density));
 
   // Trees arrive in small groves with broad open gaps between them, but stay
   // close enough to read as individual trees from the chase camera.
@@ -102,7 +103,7 @@ export function createScenery(
 
   // Ferns, low flowering plants, and flower heads add readable ground-level
   // variety between the close grass edge and the more distant trees.
-  const understoryCount = Math.floor(span * 0.55);
+  const understoryCount = Math.floor(span * 0.55 * density);
   for (let i = 0; i < understoryCount; i++) {
     const z = startZ + random() * span;
     const side = random() < 0.5 ? -1 : 1;
@@ -127,7 +128,7 @@ export function createScenery(
 
   // Fine grass clumps soften the road edge and fade quickly into open fields.
   const grassRows = Math.ceil(span / 1.8);
-  for (let i = 0; i < grassRows * 27; i++) {
+  for (let i = 0; i < grassRows * 27 * density; i++) {
     const z = startZ + random() * span;
     const side = random() < 0.5 ? -1 : 1;
     const offset = 5.35 + random() * 5.4;
@@ -148,7 +149,7 @@ export function createScenery(
   }
 
   // Scattered low shrubs and weathered stones make the open slopes read at speed.
-  const smallCount = Math.floor(span * 2.25);
+  const smallCount = Math.floor(span * 2.25 * density);
   for (let i = 0; i < smallCount; i++) {
     const z = startZ + random() * span;
     const side = random() < 0.5 ? -1 : 1;
@@ -179,18 +180,18 @@ export function createScenery(
   addInstanced(group, flowerHeads, flowerCount);
   addInstanced(group, shrubs, shrubCount);
   addInstanced(group, rocks, rockCount);
-  addBirdFlocks(group,random,roadX,height,startZ,span);
+  if(density>=.3)addBirdFlocks(group,random,roadX,height,startZ,span,density);
   return group;
 }
 
-function addBirdFlocks(parent:THREE.Group,random:()=>number,roadX:(z:number)=>number,height:(x:number,z:number)=>number,startZ:number,span:number):void{
+function addBirdFlocks(parent:THREE.Group,random:()=>number,roadX:(z:number)=>number,height:(x:number,z:number)=>number,startZ:number,span:number,density:number):void{
   const material=new THREE.MeshStandardMaterial({color:0x252e2a,roughness:1,side:THREE.DoubleSide});
   const wingGeometry=new THREE.BufferGeometry();
   wingGeometry.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,.30,.035,0,.15,-.045,.015, 0,0,0,.15,-.045,.015,-.30,.035,0],3));
   wingGeometry.setIndex([0,1,2,3,4,5]);wingGeometry.computeVertexNormals();
   const bodyGeometry=new THREE.SphereGeometry(1,6,5);bodyGeometry.scale(.035,.025,.095);
   const flocks:THREE.Group[]=[];
-  for(let f=0;f<2;f++){
+  for(let f=0;f<(density<.6?1:2);f++){
     const z=startZ+span*(.2+random()*.6),x=roadX(z)+(random()-.5)*90,flock=new THREE.Group();
     flock.position.set(x,height(x,z)+22+random()*15,z);flock.userData.base={x,z,y:flock.position.y};
     const birds=4+Math.floor(random()*4);
@@ -788,7 +789,7 @@ function addWildlife(g:THREE.Group, rng:()=>number, world:{height:(x:number,z:nu
 
 
 /** Sparse groves and dense ground cover continue in every direction away from the road. */
-export function createWilderness(tx:number,tz:number,world:{seed:number;height:(x:number,z:number)=>number;lateral:(x:number,z:number)=>number;pond:(x:number,z:number)=>{x:number;z:number;rx:number;rz:number}|null},season:string){
+export function createWilderness(tx:number,tz:number,world:{seed:number;height:(x:number,z:number)=>number;lateral:(x:number,z:number)=>number;pond:(x:number,z:number)=>{x:number;z:number;rx:number;rz:number}|null},season:string,density=1){
  const g=new THREE.Group(),rng=randomSource(world.seed^Math.imul(tx,73856093)^Math.imul(tz,19349663));
  const mat=new THREE.MeshStandardMaterial({color:season==='winter'?0xc9d1c4:0x627942,map:makeBroadleafTexture(),alphaTest:.34,side:THREE.DoubleSide,roughness:1,vertexColors:true});
  const foliage=new THREE.InstancedMesh(makeBroadleafCrownGeometry('oak'),mat,40);
@@ -796,14 +797,15 @@ export function createWilderness(tx:number,tz:number,world:{seed:number;height:(
  const grass=new THREE.InstancedMesh(makeGrassGeometry(),new THREE.MeshStandardMaterial({color:season==='winter'?0xccd5c5:0x78924f,side:THREE.DoubleSide,vertexColors:true}),1800);
  const shrub=new THREE.InstancedMesh(makeShrubGeometry(),mat.clone(),70);
  const d=new THREE.Object3D();let trees=0,grasses=0,shrubs=0;const pond=world.pond(tx,tz);
- for(let i=0;i<2000;i++){
+ const treeLimit=Math.min(40,Math.ceil(40*density)),shrubLimit=Math.min(70,Math.ceil(70*density)),grassLimit=Math.min(1800,Math.ceil(1800*density));
+ for(let i=0;i<2000*density;i++){
  const x=tx*192+rng()*192,z=tz*192+rng()*192;
  if(Math.abs(world.lateral(x,z))<38||pond&&Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz)<1.25)continue;
  d.position.set(x,world.height(x,z),z);d.rotation.set(0,rng()*Math.PI*2,0);d.scale.setScalar(.85+rng()*.6);d.updateMatrix();
- if(i<140&&trees<40){foliage.setMatrixAt(trees,d.matrix);trunks.setMatrixAt(trees++,d.matrix);}
- else if(i<120&&shrubs<70){shrub.setMatrixAt(shrubs++,d.matrix);}
- else if(grasses<1800){grass.setMatrixAt(grasses++,d.matrix);}}
+ if(i<140*density&&trees<treeLimit){foliage.setMatrixAt(trees,d.matrix);trunks.setMatrixAt(trees++,d.matrix);}
+ else if(i<120*density&&shrubs<shrubLimit){shrub.setMatrixAt(shrubs++,d.matrix);}
+ else if(grasses<grassLimit){grass.setMatrixAt(grasses++,d.matrix);}}
  addInstanced(g,foliage,trees);addInstanced(g,trunks,trees);addInstanced(g,grass,grasses);addInstanced(g,shrub,shrubs);
- addWildlife(g,rng,world,tx,tz,season);
+ if(density>=.3)addWildlife(g,rng,world,tx,tz,season);
  return g;
 }

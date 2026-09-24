@@ -33,6 +33,8 @@ Gamepad input uses the left stick and triggers. A connected controller was not a
 
 The bottom controls open the world, atmosphere, vehicle, camera, sound, and graphics panels. World settings include a reproducible seed and road character. Sound and graphics preferences persist in this browser.
 
+Graphics has **Ultra**, **High**, **Medium**, and **Low** presets. Low reduces render resolution, terrain range and detail, vegetation, and shadows for slower mobile hardware. New touch devices start on Low; existing saved preferences remain in effect until changed in Settings. Drag directly on the road view to look around; touch controls remain available for driving.
+
 ## What is included
 
 The default world is a seeded highland road with rolling terrain, streamed world chunks, fuller conifer boughs, crossed leaf canopies with visible branching and birch bark, ferns, meadow flowers, shrubs, roadside rails, and stone walls. Roadside trees now form denser rows on both verges. It includes an angular silver coupe with an open modeled cockpit, three camera views, local settings, and procedural motor, wind, tire, and sliding-tire audio. Driving runs on a fixed-step simulation with softened, speed-limited steering and automatic cruise. The handbrake reduces rear grip so the vehicle can yaw while momentum carries it forward. Arrow keys and A/D use the same screen-direction steering convention.
