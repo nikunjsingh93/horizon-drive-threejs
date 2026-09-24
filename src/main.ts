@@ -6,6 +6,15 @@ import {createVehicle} from './vehicle';
 import {DriveAudio} from './audio';
 import './style.css';
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
+const touchPointer=matchMedia('(any-pointer: coarse)');
+const compactLandscape=matchMedia('(orientation: landscape) and (max-height: 600px) and (max-width: 950px)');
+function showTouchControls(){
+  document.documentElement.classList.toggle('touch-device',navigator.maxTouchPoints>0||touchPointer.matches||compactLandscape.matches||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+}
+showTouchControls();
+touchPointer.addEventListener('change',showTouchControls);
+compactLandscape.addEventListener('change',showTouchControls);
+window.addEventListener('pointerdown',event=>{if(event.pointerType==='touch')document.documentElement.classList.add('touch-device');},{passive:true});
 const defaults={seed:'OPEN-ROAD',style:'flowing',season:'summer',light:'day',quality:'high',color:'#e5e8e2',volume:.35,muted:false,view:'chase',transmission:'automatic'};
 let settings={...defaults};try{settings={...defaults,...JSON.parse(localStorage.getItem('horizon-settings')||'{}')};}catch{}
 const save=()=>{try{localStorage.setItem('horizon-settings',JSON.stringify(settings));}catch{}};
@@ -26,7 +35,7 @@ let mouseDragging=false,mousePointer=-1,mouseX=0,mouseY=0,mouseYaw=0,mousePitch=
 const telemetry={frames:0,elapsed:0,simulated:0,meanMs:0,p95Ms:0,maxMs:0,triangles:0,drawCalls:0,chunks:0,memoryGeometries:0,errors:0,gamepad:false,maxLateral:0,seed:settings.seed};let samples:number[]=[];let gamepadButtons:boolean[]=[];
 window.addEventListener('error',()=>telemetry.errors++);window.addEventListener('unhandledrejection',()=>telemetry.errors++);
 function toast(s:string){$('toast').textContent=s;$('toast').style.opacity='1';setTimeout(()=>$('toast').style.opacity='0',2400);}
-function begin(){if(!started){started=true;$('intro').hidden=true;$('hint').hidden=false;setTimeout(()=>$('hint').style.opacity='0',11000);}void audio.start();}
+function begin(){if(!started){started=true;document.body.classList.add('driving');$('intro').hidden=true;$('hint').hidden=false;setTimeout(()=>$('hint').style.opacity='0',11000);}void audio.start();}
 function toggleAuto(){begin();drive.auto=!drive.auto;syncAuto();toast(drive.auto?'Autodrive · enjoy the view':'You’re in control');}
 function syncAuto(){$('auto').classList.toggle('active',drive.auto);$('autoState').textContent=drive.auto?'ON':'OFF';}
 function syncTouchGears(){document.querySelector<HTMLElement>('.touch-gears')?.toggleAttribute('hidden',settings.transmission!=='manual');}
