@@ -1,5 +1,7 @@
 # Horizon Drive
 
+**Play the game:** <https://nikunjsingh93.github.io/horizon-drive-threejs/>
+
 A quiet browser driving game built with Three.js and TypeScript. It uses original procedural scenery, a hand-built vehicle, generated road and terrain, and Web Audio. It is an independent interpretation of the Slow Roads experience; it does not use Slow Roads code or assets.
 
 ## Try the running preview
