@@ -8,6 +8,10 @@ The local preview is at <http://127.0.0.1:5173/>. It is currently running in the
 
 To develop the game, install Node.js 20 or newer, run `npm install`, then `npm run dev` and open the address Vite prints. Use `npm run build` to create a production build and `npm test` to run the driving model checks.
 
+## Play on a phone with GitHub Pages
+
+In the GitHub repository, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**. Push the `main` branch; the Pages workflow installs dependencies, builds the game with the repository URL prefix, and publishes it. Open <https://nikunjsingh93.github.io/horizon-drive-threejs/> in a phone browser after the workflow succeeds. The on-screen buttons provide touch controls. GitHub Pages is public, so anyone with the link can play.
+
 ## Controls
 
 - **W / Up:** accelerate
