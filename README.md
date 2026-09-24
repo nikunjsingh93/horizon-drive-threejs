@@ -12,6 +12,8 @@ To develop the game, install Node.js 20 or newer, run `npm install`, then `npm r
 
 In the GitHub repository, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**. Push the `main` branch; the Pages workflow installs dependencies, builds the game with the repository URL prefix, and publishes it. Open <https://nikunjsingh93.github.io/horizon-drive-threejs/> in a phone browser after the workflow succeeds. The on-screen buttons provide touch controls. GitHub Pages is public, so anyone with the link can play.
 
+To install it as an app, open that URL in **Chrome on Android** and choose **Install** from the browser menu. On **iPhone**, open it in **Safari**, tap **Share**, then **Add to Home Screen** and enable **Open as Web App** if shown. Launch the installed icon once while online to cache the game for later offline play. Updates are fetched when you reopen the app while online.
+
 ## Controls
 
 - **W / Up:** accelerate

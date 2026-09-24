@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "Horizon Drive",
+  "short_name": "Horizon",
+  "description": "Take the long way through a peaceful, endless countryside.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#263436",
+  "theme_color": "#263436",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

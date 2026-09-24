@@ -112,4 +112,11 @@ function frame(now:number){requestAnimationFrame(frame);const raw=(now-last)/100
 }
 requestAnimationFrame(frame);
 
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`)
+      .catch(error => console.warn('Offline install unavailable:', error));
+  });
+}
+
 
