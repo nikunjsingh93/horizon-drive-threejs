@@ -8,9 +8,11 @@ export class DriveAudio {
   private tireGain: GainNode | null = null;
   private tireFilter: BiquadFilterNode | null = null;
   private skidGain: GainNode | null = null;
-  private skidFilter: BiquadFilterNode | null = null;
-  private skidTone: OscillatorNode | null = null;
-  private skidToneGain: GainNode | null = null;
+  private skidBuffer: AudioBuffer | null = null;
+  private skidSource: AudioBufferSourceNode | null = null;
+  private skidPlaying = false;
+  private skidLatched = false;
+  private skidLoadStarted = false;
   private engineFilter: BiquadFilterNode | null = null;
   private volume = 0.35;
   private muted = false;
@@ -29,6 +31,7 @@ export class DriveAudio {
     try {
       if (!this.context) this.initialize(AudioContextClass);
       if (this.context?.state === "suspended") await this.context.resume();
+      void this.loadSkidSample();
     } catch {
       // Audio is an enhancement; browser policy or device limitations should not break driving.
     }
@@ -69,16 +72,25 @@ export class DriveAudio {
 
     // Tire texture stays understated on pavement and warms slightly on loose ground.
     const roughness = this.smoothedOffroad;
-    if (this.tireGain) this.ramp(this.tireGain.gain, 0.003 + motion * (0.014 + roughness * 0.02 + this.smoothedSlide * 0.075), now, 0.2);
+    if (this.tireGain) this.ramp(this.tireGain.gain, 0.003 + motion * (0.014 + roughness * 0.02 + this.smoothedSlide * 0.025), now, 0.2);
     if (this.tireFilter) {
       this.ramp(this.tireFilter.frequency, 520 + motion * 620 + roughness * 420 + this.smoothedSlide * 1150, now, 0.2);
       this.ramp(this.tireFilter.Q, 0.55 + roughness * 0.25, now, 0.3);
     }
+    // A recorded tire chirp plays once per loss-of-grip event; holding the
+    // handbrake cannot loop it into a continuous artificial whistle.
     const squeal = Math.min(1, Math.max(0, skid));
-    if (this.skidGain) this.ramp(this.skidGain.gain, squeal * 0.13, now, squeal ? 0.045 : 0.16);
-    if (this.skidFilter) this.ramp(this.skidFilter.frequency, 1050 + motion * 1300, now, 0.08);
-    if (this.skidTone) this.ramp(this.skidTone.frequency, 370 + velocity * 13, now, 0.09);
-    if (this.skidToneGain) this.ramp(this.skidToneGain.gain, squeal * 0.012, now, squeal ? 0.05 : 0.14);
+    if (squeal < 0.12) this.skidLatched = false;
+    if (squeal > 0.2 && !this.skidLatched && !this.skidPlaying && this.skidBuffer) {
+      this.skidLatched = true;
+      this.playSkidSample(context);
+    }
+    if (this.skidPlaying && this.skidGain && squeal < 0.12) {
+      this.ramp(this.skidGain.gain, 0, now, 0.07);
+      this.skidSource?.stop(now + 0.22);
+      this.skidPlaying = false;
+      this.skidSource = null;
+    }
   }
 
   setVolume(volume: number): void {
@@ -142,29 +154,46 @@ export class DriveAudio {
     tireGain.connect(master);
     this.tireFilter = tireFilter;
     this.tireGain = tireGain;
-    const skid = this.createNoise(context, 2);
-    const skidFilter = context.createBiquadFilter();
-    skidFilter.type = 'bandpass';
-    skidFilter.frequency.value = 1400;
-    skidFilter.Q.value = 1.4;
     const skidGain = context.createGain();
     skidGain.gain.value = 0;
-    skid.connect(skidFilter);
-    skidFilter.connect(skidGain);
     skidGain.connect(master);
-    this.skidFilter = skidFilter;
     this.skidGain = skidGain;
-    const skidTone = context.createOscillator();
-    skidTone.type = 'sine';
-    const skidToneGain = context.createGain();
-    skidToneGain.gain.value = 0;
-    skidTone.connect(skidToneGain);
-    skidToneGain.connect(master);
-    skidTone.start();
-    this.skidTone = skidTone;
-    this.skidToneGain = skidToneGain;
     this.started = true;
     this.applyMasterGain();
+  }
+
+  private async loadSkidSample(): Promise<void> {
+    if (this.skidLoadStarted || !this.context) return;
+    this.skidLoadStarted = true;
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}audio/tire-squeal-cc0.mp3`);
+      if (!response.ok) throw new Error(`Tire audio: ${response.status}`);
+      this.skidBuffer = await this.context.decodeAudioData(await response.arrayBuffer());
+    } catch (error) {
+      this.skidLoadStarted = false;
+      console.warn('Tire audio unavailable.', error);
+    }
+  }
+
+  private playSkidSample(context: AudioContext): void {
+    if (!this.skidBuffer || !this.skidGain) return;
+    const now = context.currentTime;
+    const source = context.createBufferSource();
+    source.buffer = this.skidBuffer;
+    source.connect(this.skidGain);
+    this.skidSource = source;
+    this.skidPlaying = true;
+    this.skidGain.gain.cancelScheduledValues(now);
+    this.skidGain.gain.setValueAtTime(0, now);
+    this.skidGain.gain.setTargetAtTime(0.38, now, 0.025);
+    source.onended = () => {
+      if (this.skidSource === source) {
+        this.skidSource = null;
+        this.skidPlaying = false;
+        this.skidGain?.gain.setValueAtTime(0, context.currentTime);
+      }
+    };
+    source.start(now);
   }
 
   private createNoise(context: AudioContext, seconds: number): AudioBufferSourceNode {

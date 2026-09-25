@@ -4,12 +4,12 @@ import type {Landscape} from './simulation';
 const clamp01=(value:number)=>Math.max(0,Math.min(1,value));
 
 /** One grip-loss signal drives both the tire sound and the road marks. */
-export function skidAmount(speed:number,brake:number,handbrake:boolean,slip:number,offroad:boolean):number {
+export function skidAmount(speed:number,brake:number,handbrake:boolean,slip:number,offroad:boolean,hardBrakeSeconds=0):number {
   if(offroad)return 0;
   const velocity=Math.abs(speed),rolling=clamp01((velocity-5)/12);
-  const hardBrake=clamp01((brake-.68)/.32)*rolling;
+  const hardBrake=hardBrakeSeconds>=2.5?clamp01((brake-.68)/.32)*clamp01((velocity-2)/6):0;
   const lockedRear=handbrake?clamp01((velocity-4)/8)*.85:0;
-  const sideways=clamp01((Math.abs(slip)-.09)/.25)*rolling;
+  const sideways=brake>.1&&!handbrake?0:clamp01((Math.abs(slip)-.09)/.25)*rolling;
   return Math.max(hardBrake,lockedRear,sideways);
 }
 

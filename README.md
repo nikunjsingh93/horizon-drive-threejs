@@ -2,7 +2,9 @@
 
 **Play the game:** <https://nikunjsingh93.github.io/horizon-drive-threejs/>
 
-A quiet browser driving game built with Three.js and TypeScript. It uses original procedural scenery, a hand-built vehicle, generated road and terrain, and Web Audio. It is an independent interpretation of the Slow Roads experience; it does not use Slow Roads code or assets.
+A quiet browser driving game built with Three.js and TypeScript. It uses original procedural scenery, a hand-built vehicle, generated road and terrain, Web Audio, and one CC0 tire-squeal recording. It is an independent interpretation of the Slow Roads experience; it does not use Slow Roads code or assets.
+
+The tire-squeal recording in `public/audio/tire-squeal-cc0.mp3` is [“Screeching Tires #1” by Dorian Clair](https://bigsoundbank.com/crissement-de-pneus-1-s2368.html), published under CC0. It is played as a short, non-looping effect when the tires lose grip.
 
 ## Try the running preview
 

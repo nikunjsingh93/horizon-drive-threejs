@@ -142,6 +142,12 @@ assert.ok(Math.abs(drifting.car.slip) > 0.15, "handbrake corner should create a 
 assert.ok(Math.abs(drifting.car.slip) > Math.abs(regularRight.slip) * 3, "locked rear wheels should slide more than a normal turn");
 for (let i = 0; i < 90; i += 1) drifting.car.step(tick, neutral);
 assert.ok(Math.abs(drifting.car.slip) < 0.03, "tires should regain grip after handbrake release");
+const handbrakeStop = new Driving(new FlatLandscape('handbrake-stop', 'gentle'));
+handbrakeStop.speed = 28;
+for (let i = 0; i < 2 * 120; i += 1) handbrakeStop.step(1 / 120, { ...neutral, steer: 1, handbrake: true });
+assert.ok(handbrakeStop.speed < 11, 'holding the handbrake should scrub speed instead of sustaining a long drift');
+for (let i = 0; i < 120; i += 1) handbrakeStop.step(1 / 120, { ...neutral, steer: 1, handbrake: true });
+assert.ok(handbrakeStop.speed < 2, 'the locked-wheel slide should end as the car slows');
 // Equal flat surfaces must retain equal speed, even several kilometres off road.
 const paved = new Driving(new FlatLandscape('surface','flowing'));
 const loose = new Driving(new FlatLandscape('surface','flowing'));loose.x=2500;

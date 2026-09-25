@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import {Landscape} from '../src/simulation';
 import {WorldView} from '../src/world';
 import {SkidMarks,skidAmount} from '../src/skid';
+import {styledPixelRatio} from '../src/quality';
+assert.ok(styledPixelRatio(1080,2,'high','2160','retro')<=480/1080,'retro should cap explicit resolution');
+assert.ok(styledPixelRatio(1080,2,'high','2160','modern')>1,'modern should keep explicit resolution');
 // Drawing itself is verified in-browser; here exercise actual mesh generation and disposal.
 const drawing=new Proxy({createImageData:(w:number,h:number)=>({data:new Uint8ClampedArray(w*h*4)})},{get:(obj,key)=>key in obj?(obj as any)[key]:()=>{}});
 (globalThis as any).document={createElement:()=>({width:0,height:0,getContext:()=>drawing})};
@@ -63,7 +66,10 @@ for(const [x,z] of [[2100,30],[2100,2100],[-2300,-2100],[0,30]]){
 }
 assert.ok(disposals>150,'obsolete terrain and vegetation geometries must be disposed');
 assert.equal(skidAmount(22,.3,false,0,false),0,'gentle braking should not squeal');
-assert.ok(skidAmount(22,1,false,0,false)>.9,'hard braking should skid');
+assert.equal(skidAmount(22,1,false,0,false,2.49),0,'brief hard braking should stay quiet');
+assert.ok(skidAmount(22,1,false,0,false,2.5)>.9,'sustained hard braking should skid');
+assert.ok(skidAmount(5,1,false,0,false,2.5)>.2,'delayed braking should remain audible near the end of a stop');
+assert.equal(skidAmount(22,.4,false,.4,false,3),0,'gentle braking should not bypass the delay via slip');
 assert.ok(skidAmount(12,0,true,.2,false)>.5,'handbrake slides should skid');
 assert.equal(skidAmount(22,1,true,.5,true),0,'off-road movement should not leave asphalt marks');
 const marks=new SkidMarks(scene,land),roadX=land.roadX(30)-1.85;

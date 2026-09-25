@@ -48,7 +48,7 @@ export class Driving {
  let force=throttle*(this.speed<-.3?10:5.5)-drag-gradient*5;
  if(brake>0){if(this.speed>.35)force-=brake*11;else force-=brake*3.2;}
  // Locked rear wheels shed speed while preserving enough momentum to slide.
- if(handbrake)force-=Math.sign(this.speed)*Math.min(Math.abs(this.speed)/dt,4.8);
+ if(handbrake)force-=Math.sign(this.speed)*Math.min(Math.abs(this.speed)/dt,7.5);
  // Grass has the same power and terminal speed as asphalt; grip and sound still differ.
  const manual=this.transmission==='manual'&&!this.auto;
  const limits=[0,12,20,29,38,46,55];
@@ -60,7 +60,7 @@ export class Driving {
    const power=this.shiftTime>0||this.rpm>6400?0:throttle*ratio*direction;
    force=power-drag-gradient*5;
    if(brake>0)force-=Math.sign(this.speed)*Math.min(Math.abs(this.speed)/dt,brake*11);
-   if(handbrake)force-=Math.sign(this.speed)*Math.min(Math.abs(this.speed)/dt,4.8);
+   if(handbrake)force-=Math.sign(this.speed)*Math.min(Math.abs(this.speed)/dt,7.5);
  }else{this.gear=this.speed<-.3?-1:Math.min(6,1+Math.floor(Math.abs(this.speed)/8));this.rpm=850+Math.abs(this.speed)/(this.gear<0?8:limits[this.gear])*4700;}
 
  if((throttle===0||manual&&this.gear===0)&&brake===0&&Math.abs(this.speed)<.15){this.speed=0;}else this.speed=clamp(this.speed+force*dt,-7,47);
@@ -71,12 +71,12 @@ export class Driving {
  // Keep the eased wheel input, but allow a shorter arc once the wheel turns.
  const baseTurn=clamp(-this.speed/3.0*Math.tan(this.steer),-0.56,0.56)*(this.offroad?.72:1);
  const sliding=handbrake&&Math.abs(this.speed)>3;
- const turn=baseTurn*(sliding?1.65:1);
+ const turn=baseTurn*(sliding?1.2:1);
  this.heading+=turn*dt;
  // Tire grip aligns travel with the car's nose. A handbrake slide sharply
  // reduces that grip, allowing the body to rotate while its momentum carries on.
  const delta=Math.atan2(Math.sin(this.heading-this.travelHeading),Math.cos(this.heading-this.travelHeading));
- const grip=sliding ? 0.75 : this.offroad ? 4.5 : 12;
+ const grip=sliding ? 2.7 : this.offroad ? 4.5 : 12;
  this.travelHeading+=delta*(1-Math.exp(-grip*dt));
  this.slip=Math.atan2(Math.sin(this.heading-this.travelHeading),Math.cos(this.heading-this.travelHeading));
  this.x+=Math.sin(this.travelHeading)*this.speed*dt;this.z+=Math.cos(this.travelHeading)*this.speed*dt;
