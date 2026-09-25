@@ -61,7 +61,7 @@ export class DriveAudio {
       this.ramp(oscillator.frequency, baseHz * (index + 1), now, 0.16);
     });
     this.engine.forEach(({ gain }, index) => {
-      const level = (0.012 + load * 0.016) / (index + 1);
+      const level = (0.016 + load * 0.021) / (index + 1);
       this.ramp(gain.gain, level, now, 0.2);
     });
     if (this.engineFilter) this.ramp(this.engineFilter.frequency, 260 + velocity * 13, now, 0.24);
@@ -185,7 +185,7 @@ export class DriveAudio {
     this.skidPlaying = true;
     this.skidGain.gain.cancelScheduledValues(now);
     this.skidGain.gain.setValueAtTime(0, now);
-    this.skidGain.gain.setTargetAtTime(0.38, now, 0.025);
+    this.skidGain.gain.setTargetAtTime(0.15, now, 0.025);
     source.onended = () => {
       if (this.skidSource === source) {
         this.skidSource = null;
